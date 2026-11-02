@@ -267,3 +267,61 @@ analysis_html=f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <footer><p>Arquivo estático otimizado para iPhone. Dados pessoais de treino e possivelmente GPS: mantenha privado.</p></footer></main></body></html>"""
 (root/"analysis.html").write_text(analysis_html,encoding="utf-8")
 print(f"Análise avançada criada: {len(valid)} atividades válidas, {len(month_rows)} meses e {len(quality14)} sessões de qualidade estimadas.")
+
+
+# Coaching comparisons: matched heart-rate pace, dynamics, zones and recovery context.
+def _fmtavg2(vals,d=1):
+ z=[float(v) for v in vals if isinstance(v,(int,float)) and math.isfinite(v)]
+ return f"{sum(z)/len(z):.{d}f}" if z else "—"
+def _items90(days):
+ return [x for x in valid if x["dt"]>=last_dt-_td(days=days-1)]
+p90=_items90(90); pprev=[x for x in valid if last_dt-_td(days=180)<=x["dt"]<last_dt-_td(days=90)]
+def _km2(xs): return sum((x["a"].get("distance") or 0)/1000 for x in xs)
+def _pace2(xs):
+ return _v([(x["a"].get("duration") or 0)/((x["a"].get("distance") or 1)/1000) for x in xs if (x["a"].get("distance") or 0)>0])
+def _row2(label,xs):
+ return f'<tr><td>{label}</td><td>{len(xs)}</td><td>{_km2(xs):.1f}</td><td>{_p(_pace2(xs))}</td><td>{_fmtavg2([x["a"].get("averageHR") for x in xs],0)}</td><td>{_fmtavg2([x["a"].get("avgPower") for x in xs],0)}</td><td>{_fmtavg2([x["a"].get("averageRunningCadenceInStepsPerMinute") for x in xs],0)}</td></tr>'
+period_rows=_row2("Últimos 90 dias",p90)+_row2("90 dias anteriores",pprev)
+band_rows=[]
+for lo,hi in [(130,140),(140,150),(150,160),(160,170)]:
+ xs=[x for x in valid if isinstance(x["a"].get("averageHR"),(int,float)) and lo<=x["a"]["averageHR"]<hi and (x["a"].get("distance") or 0)>=3000]
+ band_rows.append(f'<tr><td>{lo}–{hi} bpm</td><td>{len(xs)}</td><td>{_p(_pace2(xs))}</td><td>{_fmtavg2([x["a"].get("avgPower") for x in xs],0)}</td></tr>')
+dyn_rows=[]
+for k,label,unit,d in [("averageRunningCadenceInStepsPerMinute","Cadência","spm",0),("avgGroundContactTime","Contato com o solo","ms",0),("avgStrideLength","Comprimento da passada","cm",1),("avgVerticalOscillation","Oscilação vertical","cm",1),("avgVerticalRatio","Razão vertical","%",1)]:
+ dyn_rows.append(f'<tr><td>{label}</td><td>{_fmtavg2([x["a"].get(k) for x in p90],d)}</td><td>{_fmtavg2([x["a"].get(k) for x in pprev],d)}</td><td>{unit}</td></tr>')
+zone_keys=[f"hrTimeInZone_{i}" for i in range(1,6)]
+zone_vals=[sum(float(x["a"].get(k) or 0) for x in valid) for k in zone_keys]; zone_total=sum(zone_vals)
+zone_rows="".join(f'<tr><td>Zona {i+1}</td><td>{v/3600:.1f} h</td><td>{v/zone_total*100:.1f}%</td></tr>' for i,v in enumerate(zone_vals) if zone_total)
+recovery="<p>Dados de recuperação não disponíveis.</p>"
+if wellness_path.exists():
+ try:
+  ww=json.loads(wellness_path.read_text(encoding="utf-8")); dd=ww.get("datasets",{})
+  def flat2(name,key=None):
+   out=[]
+   for ch in dd.get(name,[]):
+    dat=ch.get("data")
+    if isinstance(dat,list):out.extend(dat)
+    elif isinstance(dat,dict):
+     if key and isinstance(dat.get(key),list):out.extend(dat[key])
+     else:
+      for vv in dat.values():
+       if isinstance(vv,list):out.extend(vv)
+   return out
+  day=last_dt.strftime("%Y-%m-%d")
+  sl=next((q for q in flat2("sleep_summaries") if q.get("calendarDate")==day),{})
+  hv=next((q for q in flat2("hrv_summaries","hrvSummaries") if q.get("calendarDate")==day),{})
+  dy=next((q for q in flat2("daily_summaries","data") if q.get("calendarDate")==day),{})
+  hrs=(sl.get("sleepTimeSeconds") or 0)/3600 if sl.get("sleepTimeSeconds") else None
+  score=((sl.get("sleepScores") or {}).get("overall") or {}).get("value")
+  bb=(dy.get("bodyBattery") or {}).get("latestValue"); rest=(dy.get("heartRate") or {}).get("restingValue")
+  recovery=f'<div class="cards"><div class="card"><small>Sono · {day}</small><b>{hrs:.1f} h</b></div><div class="card"><small>Score sono</small><b>{score if score is not None else "—"}</b></div><div class="card"><small>VFC noturna</small><b>{hv.get("lastNightAvg","—")} ms</b></div><div class="card"><small>VFC semanal</small><b>{hv.get("weeklyAvg","—")} ms</b></div><div class="card"><small>Body Battery</small><b>{bb if bb is not None else "—"}</b></div><div class="card"><small>FC repouso</small><b>{rest if rest is not None else "—"} bpm</b></div></div>'
+ except Exception: pass
+extra2=f"""
+<section class="panel"><div class="tag">06 · EFICIÊNCIA AERÓBICA</div><h2>Comparação entre períodos</h2><p>Comparação descritiva de blocos de 90 dias. O ritmo médio mistura rodagem, intervalado e longão; não é um teste de performance.</p><div class="scroll"><table><thead><tr><th>Período</th><th>Sessões</th><th>Km</th><th>Ritmo</th><th>FC média</th><th>Potência</th><th>Cadência</th></tr></thead><tbody>{period_rows}</tbody></table></div><h3>Ritmo em faixas de FC</h3><p>Compare apenas quando percurso, clima e tipo de sessão forem semelhantes.</p><div class="scroll"><table><thead><tr><th>Faixa FC</th><th>Treinos ≥3 km</th><th>Ritmo</th><th>Potência</th></tr></thead><tbody>{"".join(band_rows)}</tbody></table></div></section>
+<section class="panel"><div class="tag">07 · DINÂMICA</div><h2>Mecânica de corrida</h2><div class="scroll"><table><thead><tr><th>Métrica</th><th>Últimos 90 dias</th><th>90 dias anteriores</th><th>Unidade</th></tr></thead><tbody>{"".join(dyn_rows)}</tbody></table></div><p>Cadência, passada, contato com o solo e oscilação variam com velocidade, fadiga, subida, superfície e sensor. Não persiga um valor isolado; procure consistência em treinos comparáveis.</p></section>
+<section class="panel"><div class="tag">08 · INTENSIDADE</div><h2>Tempo acumulado nas zonas cardíacas</h2><div class="scroll"><table><thead><tr><th>Zona Garmin</th><th>Tempo</th><th>Participação</th></tr></thead><tbody>{zone_rows or '<tr><td colspan="3">Sem dados de zonas</td></tr>'}</tbody></table></div><p>As zonas dependem das configurações de FC máxima e limiar do Garmin. Revise essas configurações antes de interpretar a distribuição.</p></section>
+<section class="panel"><div class="tag">09 · RECUPERAÇÃO</div><h2>Indicadores do dia da última corrida</h2><p>Contexto para leitura do treino, não uma pontuação automática de prontidão.</p>{recovery}</section>
+"""
+analysis_html=analysis_html.replace("<footer>",extra2+"<footer>")
+(root/"analysis.html").write_text(analysis_html,encoding="utf-8")
+print("Análise ampliada com eficiência, dinâmica, zonas e recuperação.")
