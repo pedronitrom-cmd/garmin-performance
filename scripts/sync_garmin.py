@@ -15,9 +15,9 @@ if not os.environ.get("GARMIN_PERSONAL_API_KEY"):
     raise SystemExit("Missing GARMIN_PERSONAL_API_KEY repository secret.")
 
 end_date = date.today()
-# Query from the earliest practical Garmin Connect date so the export includes
-# the full history available in the account, not just a rolling 12-month window.
-start_date = date(2000, 1, 1)
+# Fixed baseline: the earliest activity recovered in the full-history sync.
+# Future syncs reuse this date rather than searching further back.
+start_date = date(2024, 7, 14)
 output = Path("output")
 output.mkdir(exist_ok=True)
 
