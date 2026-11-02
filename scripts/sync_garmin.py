@@ -171,10 +171,6 @@ wellness_commands = {
     "sleep_summaries": "sleep-summaries",
     "hrv_summaries": "hrv-summaries",
     "daily_summaries": "daily-summaries",
-    "stress": "stress",
-    "steps": "steps",
-    "hydration": "hydration",
-    "body_battery": "body-battery",
     "weight_measurements": "weight-measurements",
     "wellness_activity_summaries": "wellness-activity-summaries",
 }
