@@ -1,1 +1,2 @@
 garmin-connect-personal-api-python
+fitparse
