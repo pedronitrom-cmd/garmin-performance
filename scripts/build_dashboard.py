@@ -94,12 +94,86 @@ for key,items in sorted(months.items(),reverse=True):
         </article>""")
     month_sections.append(f'<section id="{month_id}" class="month"><div class="kicker">HISTÓRICO MENSAL</div><h2>{title}</h2><p class="monthstat">{km:.1f} km · {len(items)} sessões · média {km/max(1,len(items)):.1f} km por sessão</p>{"".join(blocks)}<a class="top" href="#top">↑ Voltar ao início</a></section>')
 
+
+# Wellness: daily summaries are the most complete source for recovery metrics.
+wellness_path = root / "wellness.json"
+wellness_panel = ""
+if wellness_path.exists():
+    wellness = json.loads(wellness_path.read_text(encoding="utf-8"))
+    datasets = wellness.get("datasets", {})
+    def flatten(name, list_key=None):
+        out = []
+        for chunk in datasets.get(name, []):
+            data = chunk.get("data")
+            if isinstance(data, list):
+                out.extend(data)
+            elif isinstance(data, dict):
+                if list_key and isinstance(data.get(list_key), list):
+                    out.extend(data[list_key])
+                else:
+                    for value in data.values():
+                        if isinstance(value, list):
+                            out.extend(value)
+        return out
+    sleep_rows = {x.get("calendarDate"): x for x in flatten("sleep_summaries") if x.get("calendarDate")}
+    hrv_rows = {x.get("calendarDate"): x for x in flatten("hrv_summaries", "hrvSummaries") if x.get("calendarDate")}
+    daily_rows = {x.get("calendarDate"): x for x in flatten("daily_summaries", "data") if x.get("calendarDate")}
+    def avg(vals):
+        vals = [float(v) for v in vals if isinstance(v, (int,float)) and math.isfinite(v)]
+        return sum(vals)/len(vals) if vals else None
+    sleep_hours = {d: (x.get("sleepTimeSeconds") or 0)/3600 for d,x in sleep_rows.items() if x.get("sleepTimeSeconds")}
+    sleep_score = {d: ((x.get("sleepScores") or {}).get("overall") or {}).get("value") for d,x in sleep_rows.items()}
+    hrv_avg = {d: x.get("lastNightAvg") for d,x in hrv_rows.items()}
+    hrv_week = {d: x.get("weeklyAvg") for d,x in hrv_rows.items()}
+    bb = {d: ((x.get("bodyBattery") or {}).get("latestValue")) for d,x in daily_rows.items()}
+    stress_avg = {d: ((x.get("stress") or {}).get("avgLevel")) for d,x in daily_rows.items()}
+    resting_hr = {d: ((x.get("heartRate") or {}).get("restingValue")) for d,x in daily_rows.items()}
+    steps = {d: (((x.get("movement") or {}).get("steps") or {}).get("value")) for d,x in daily_rows.items()}
+    spo2 = {d: ((x.get("pulseOx") or {}).get("avgValue")) for d,x in daily_rows.items()}
+    resp = {d: ((x.get("respiration") or {}).get("avgValue")) for d,x in daily_rows.items()}
+    dates = sorted(set(sleep_rows)|set(hrv_rows)|set(daily_rows))
+    def latest(mapping):
+        valid = [(d,v) for d,v in mapping.items() if isinstance(v,(int,float))]
+        return max(valid) if valid else (None,None)
+    def metric(label, mapping, unit="", digits=0):
+        d,v=latest(mapping)
+        value = f"{v:.{digits}f}{unit}" if v is not None else "—"
+        when = d if d else "sem registro"
+        return f'<div><b>{value}</b><small>{label} · {when}</small></div>'
+    wellness_months = defaultdict(list)
+    for d in dates:
+        wellness_months[d[:7]].append(d)
+    month_rows=[]
+    for m,ds in sorted(wellness_months.items(), reverse=True):
+        month_rows.append(f'<tr><td>{m}</td><td>{avg([sleep_hours.get(d) for d in ds]):.1f} h</td><td>{avg([sleep_score.get(d) for d in ds]):.0f}</td><td>{avg([hrv_avg.get(d) for d in ds]):.0f} ms</td><td>{avg([bb.get(d) for d in ds]):.0f}</td><td>{avg([stress_avg.get(d) for d in ds]):.0f}</td><td>{avg([resting_hr.get(d) for d in ds]):.0f}</td></tr>')
+    wellness_panel = f"""
+    <section class="panel" id="recovery">
+      <div class="kicker">RECUPERAÇÃO · SAÚDE DIÁRIA</div><h2>Sono, VFC e recuperação</h2>
+      <p>Dados diários encontrados: {len(daily_rows)} resumos · {len(sleep_rows)} noites de sono · {len(hrv_rows)} registros de VFC. Valores recentes são mostrados com a data correspondente; médias mensais usam apenas dias com medição.</p>
+      <div class="metrics">
+      {metric("Sono mais recente",sleep_hours," h",1)}
+      {metric("Pontuação do sono",sleep_score,"",0)}
+      {metric("VFC noturna",hrv_avg," ms",0)}
+      {metric("VFC média semanal",hrv_week," ms",0)}
+      {metric("Body Battery",bb,"",0)}
+      {metric("Estresse médio diário",stress_avg,"",0)}
+      {metric("FC repouso",resting_hr," bpm",0)}
+      {metric("Passos",steps,"",0)}
+      {metric("SpO₂ média",spo2,"%",0)}
+      {metric("Respiração média",resp," rpm",1)}
+      </div>
+      <h3>Evolução mensal</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Sono</th><th>Score</th><th>VFC</th><th>Body Battery</th><th>Estresse</th><th>FC repouso</th></tr></thead><tbody>{''.join(month_rows)}</tbody></table></div>
+      <p class="date">Body Battery, estresse, passos, FC de repouso, SpO₂ e respiração são extraídos dos resumos diários. Consultas específicas de estresse/passos podem falhar sem significar ausência de dados. Não há estimativas para dias sem medição.</p>
+    </section>
+    """
+
 html_doc=f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>Garmin Performance Pro</title>
 <style>
 *{{box-sizing:border-box}}html{{scroll-behavior:smooth}}body{{margin:0;background:#091120;color:#eff5ff;font:15px -apple-system,BlinkMacSystemFont,Arial,sans-serif;line-height:1.5}}main{{max-width:1000px;margin:auto;padding:18px}}h1{{font-size:34px;line-height:1.1}}h2{{font-size:25px}}h3{{font-size:20px;margin:8px 0}}h4{{font-size:16px;margin:20px 0 8px}}p,.date,small{{color:#9aacc8}}.kicker{{color:#50ddd2;font-size:11px;font-weight:800;letter-spacing:2px}}.panel,.activity,.month{{background:#14213a;border:1px solid #2b3e5e;border-radius:18px;padding:17px;margin:16px 0}}.metrics{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}}.metrics div{{background:#0d192d;border-radius:11px;padding:11px}}.metrics b{{display:block;font-size:20px}}.metrics small{{font-size:11px}}svg{{display:block;width:100%;height:auto;background:#0b172a;border-radius:12px}}.monthnav a{{display:block;color:#b9d9ff;text-decoration:none;padding:10px 0;border-bottom:1px solid #2b3e5e}}.monthstat{{color:#50ddd2;font-weight:700}}body:has(.month:target) .month:not(:target){{display:none}}.scroll{{overflow-x:auto}}table{{border-collapse:collapse;width:100%;min-width:480px;font-size:12px}}td,th{{padding:9px;text-align:left;border-bottom:1px solid #2b3e5e}}th{{color:#50ddd2}}details{{background:#0d192d;border-radius:10px;padding:12px;margin-top:14px}}summary{{color:#b9d9ff;font-weight:700}}.empty{{background:#0d192d;padding:15px;border-radius:10px;color:#9aacc8}}.top{{display:inline-block;margin-top:12px;color:#9aacc8}}@media(min-width:700px){{main{{padding:28px}}.metrics{{grid-template-columns:repeat(3,minmax(0,1fr))}}.panel,.activity,.month{{padding:22px}}}}
 </style></head><body><main id="top"><div class="kicker">GARMIN CONNECT · PERFORMANCE PRO</div><h1>Painel de corrida</h1>
 <p>Histórico: {min((x["dt"] for x in runs if x["dt"]),default=datetime.now()).strftime("%d/%m/%Y")} a {max((x["dt"] for x in runs if x["dt"]),default=datetime.now()).strftime("%d/%m/%Y")} · {len(runs)} corridas/esteira · {total_km:.1f} km.</p>
 <section class="panel"><div class="kicker">FILTRO POR MÊS</div><p>Escolha um mês para ir diretamente às atividades daquele período. Os valores de distância aparecem acima dos gráficos e os dados de cada treino estão identificados.</p><nav class="monthnav">{"".join(month_nav)}</nav></section>
+{wellness_panel}
 {"".join(month_sections)}
 <footer class="panel"><p>Relatório pessoal gerado a partir dos dados FIT do Garmin Connect. Métricas ausentes não são estimadas. Mantenha este arquivo privado, pois pode conter traçados GPS.</p></footer>
 </main></body></html>'''
