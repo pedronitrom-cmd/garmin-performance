@@ -146,6 +146,26 @@ if wellness_path.exists():
     month_rows=[]
     for m,ds in sorted(wellness_months.items(), reverse=True):
         month_rows.append(f'<tr><td>{m}</td><td>{avg([sleep_hours.get(d) for d in ds]):.1f} h</td><td>{avg([sleep_score.get(d) for d in ds]):.0f}</td><td>{avg([hrv_avg.get(d) for d in ds]):.0f} ms</td><td>{avg([bb.get(d) for d in ds]):.0f}</td><td>{avg([stress_avg.get(d) for d in ds]):.0f}</td><td>{avg([resting_hr.get(d) for d in ds]):.0f}</td></tr>')
+    # Link each run to same-day recovery measurements (sleep ending that morning).
+    run_recovery_rows = []
+    for item in runs[:40]:
+        activity = item["a"]
+        day = item["dt"].strftime("%Y-%m-%d") if item["dt"] else None
+        if not day: continue
+        distance_km = (activity.get("distance") or 0)/1000
+        elapsed = activity.get("duration") or 0
+        run_pace = elapsed/distance_km if distance_km else None
+        pace_label = pace(run_pace)
+        hr_label = f'{round(activity.get("averageHR"))} bpm' if activity.get("averageHR") else "—"
+        score = sleep_score.get(day)
+        hrv_value = hrv_avg.get(day)
+        bb_value = bb.get(day)
+        run_recovery_rows.append(
+            f'<tr><td>{day}</td><td>{distance_km:.1f} km</td><td>{pace_label}</td><td>{hr_label}</td>'
+            f'<td>{round(score) if isinstance(score,(int,float)) else "—"}</td>'
+            f'<td>{round(hrv_value) if isinstance(hrv_value,(int,float)) else "—"}</td>'
+            f'<td>{round(bb_value) if isinstance(bb_value,(int,float)) else "—"}</td></tr>'
+        )
     wellness_panel = f"""
     <section class="panel" id="recovery">
       <div class="kicker">RECUPERAÇÃO · SAÚDE DIÁRIA</div><h2>Sono, VFC e recuperação</h2>
@@ -162,6 +182,7 @@ if wellness_path.exists():
       {metric("SpO₂ média",spo2,"%",0)}
       {metric("Respiração média",resp," rpm",1)}
       </div>
+      <h3>Treinos x recuperação</h3><p>Comparação das corridas recentes com sono, VFC e Body Battery registrados na mesma data. É uma associação exploratória, não prova de causalidade.</p><div class="scroll"><table><thead><tr><th>Data</th><th>Distância</th><th>Ritmo</th><th>FC média</th><th>Score sono</th><th>VFC</th><th>Body Battery</th></tr></thead><tbody>{''.join(run_recovery_rows) or '<tr><td colspan="7">Sem dados suficientes para cruzamento.</td></tr>'}</tbody></table></div>
       <h3>Evolução mensal</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Sono</th><th>Score</th><th>VFC</th><th>Body Battery</th><th>Estresse</th><th>FC repouso</th></tr></thead><tbody>{''.join(month_rows)}</tbody></table></div>
       <p class="date">Body Battery, estresse, passos, FC de repouso, SpO₂ e respiração são extraídos dos resumos diários. Consultas específicas de estresse/passos podem falhar sem significar ausência de dados. Não há estimativas para dias sem medição.</p>
     </section>
