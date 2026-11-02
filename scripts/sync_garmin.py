@@ -3,50 +3,129 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tempfile
+import zipfile
 from datetime import date, timedelta
+from io import BytesIO
 from pathlib import Path
 
-# Keep the first import small and safe: the official Garmin Personal API
-# client handles API-key exchange and authenticated requests.
+from fitparse import FitFile
+
 if not os.environ.get("GARMIN_PERSONAL_API_KEY"):
     raise SystemExit("Missing GARMIN_PERSONAL_API_KEY repository secret.")
 
 end_date = date.today()
 start_date = end_date - timedelta(days=90)
+output = Path("output")
+output.mkdir(exist_ok=True)
 
-command = [
-    "gc-personal",
-    "--quiet",
-    "activities",
-    "--start",
-    "0",
-    "--limit",
-    "100",
-    "--start-date",
-    start_date.isoformat(),
-    "--end-date",
-    end_date.isoformat(),
-]
+def cli_json(*args: str):
+    result = subprocess.run(
+        ["gc-personal", "--quiet", *args],
+        check=True, capture_output=True, text=True,
+    )
+    return json.loads(result.stdout)
 
-result = subprocess.run(command, check=True, capture_output=True, text=True)
-payload = json.loads(result.stdout)
+def safe_value(value):
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if isinstance(value, bytes):
+        return value.hex()
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
 
-output_dir = Path("output")
-output_dir.mkdir(exist_ok=True)
-output_file = output_dir / "activities.json"
-output_file.write_text(
-    json.dumps(
-        {
-            "generated_on": date.today().isoformat(),
-            "period_start": start_date.isoformat(),
-            "period_end": end_date.isoformat(),
-            "source": "Garmin Connect Personal API",
-            "activities": payload,
-        },
-        ensure_ascii=False,
-        indent=2,
-    ),
+def semicircles(value):
+    return round(value * (180.0 / 2**31), 6) if value is not None else None
+
+def parse_fit(zip_path: Path):
+    with zipfile.ZipFile(zip_path) as archive:
+        fit_name = next((n for n in archive.namelist() if n.lower().endswith(".fit")), None)
+        if not fit_name:
+            raise ValueError("No FIT file found in Garmin activity archive.")
+        fit_bytes = archive.read(fit_name)
+
+    fit = FitFile(BytesIO(fit_bytes))
+    records = []
+    laps = []
+    sessions = []
+    for message in fit.get_messages():
+        values = {field.name: safe_value(field.value) for field in message}
+        if message.name == "record":
+            lat = values.pop("position_lat", None)
+            lon = values.pop("position_long", None)
+            record = {
+                "time": values.get("timestamp"),
+                "distance_m": values.get("distance"),
+                "speed_mps": values.get("enhanced_speed") or values.get("speed"),
+                "heart_rate": values.get("heart_rate"),
+                "cadence_spm": values.get("cadence"),
+                "power_w": values.get("power"),
+                "altitude_m": values.get("enhanced_altitude") or values.get("altitude"),
+                "latitude": semicircles(lat),
+                "longitude": semicircles(lon),
+                "temperature_c": values.get("temperature"),
+                "vertical_oscillation_mm": values.get("vertical_oscillation"),
+                "stance_time_ms": values.get("stance_time"),
+                "step_length_mm": values.get("step_length"),
+                "vertical_ratio": values.get("vertical_ratio"),
+            }
+            records.append(record)
+        elif message.name == "lap":
+            laps.append(values)
+        elif message.name == "session":
+            sessions.append(values)
+
+    return {
+        "record_count": len(records),
+        "records": records,
+        "laps": laps,
+        "sessions": sessions,
+    }
+
+payload = cli_json(
+    "activities", "--start", "0", "--limit", "100",
+    "--start-date", start_date.isoformat(), "--end-date", end_date.isoformat(),
+)
+(output / "activities.json").write_text(
+    json.dumps({
+        "generated_on": date.today().isoformat(),
+        "period_start": start_date.isoformat(),
+        "period_end": end_date.isoformat(),
+        "source": "Garmin Connect Personal API",
+        "activities": payload,
+    }, ensure_ascii=False, indent=2),
     encoding="utf-8",
 )
 
-print(f"Export created: {output_file}")
+details = []
+for activity in payload:
+    activity_id = int(activity["activityId"])
+    sport = (activity.get("activityType") or {}).get("typeKey", "")
+    item = {"activity_id": activity_id, "name": activity.get("activityName"), "type": sport}
+    try:
+        item["detail"] = cli_json("activity", str(activity_id))
+    except Exception as exc:
+        item["detail_error"] = str(exc)
+
+    if sport in ("running", "treadmill_running"):
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                archive_path = Path(tmp) / f"{activity_id}.zip"
+                subprocess.run(
+                    ["gc-personal", "--quiet", "activity-download", str(activity_id),
+                     "-o", str(archive_path), "--force"],
+                    check=True, capture_output=True, text=True,
+                )
+                item["fit"] = parse_fit(archive_path)
+        except Exception as exc:
+            item["fit_error"] = str(exc)
+
+    details.append(item)
+
+(output / "activity_details.json").write_text(
+    json.dumps(details, ensure_ascii=False, indent=2),
+    encoding="utf-8",
+)
+print(f"Saved {len(payload)} activities and {len(details)} detail records.")
+print(f"Activities with FIT records: {sum(1 for x in details if x.get('fit', {}).get('record_count', 0))}")
