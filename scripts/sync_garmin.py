@@ -152,3 +152,67 @@ for activity in payload:
 )
 print(f"Saved {len(payload)} activities and {len(details)} detail records.")
 print(f"Activities with FIT records: {sum(1 for x in details if x.get('fit', {}).get('record_count', 0))}")
+
+
+# Wellness and recovery metrics, collected in monthly chunks to keep requests
+# manageable and make missing endpoint/data periods visible rather than fatal.
+def month_ranges(first: date, last: date):
+    cursor = first.replace(day=1)
+    while cursor <= last:
+        if cursor.month == 12:
+            next_month = date(cursor.year + 1, 1, 1)
+        else:
+            next_month = date(cursor.year, cursor.month + 1, 1)
+        chunk_end = min(last, next_month - timedelta(days=1))
+        yield max(first, cursor), chunk_end
+        cursor = next_month
+
+wellness_commands = {
+    "sleep_summaries": "sleep-summaries",
+    "hrv_summaries": "hrv-summaries",
+    "daily_summaries": "daily-summaries",
+    "stress": "stress",
+    "steps": "steps",
+    "hydration": "hydration",
+    "body_battery": "body-battery",
+    "weight_measurements": "weight-measurements",
+    "wellness_activity_summaries": "wellness-activity-summaries",
+}
+
+wellness = {}
+wellness_errors = []
+for output_name, command in wellness_commands.items():
+    collected = []
+    for chunk_start, chunk_end in month_ranges(start_date, end_date):
+        try:
+            result = cli_json(
+                command,
+                "--start-date", chunk_start.isoformat(),
+                "--end-date", chunk_end.isoformat(),
+            )
+            collected.append({
+                "start_date": chunk_start.isoformat(),
+                "end_date": chunk_end.isoformat(),
+                "data": result,
+            })
+        except Exception as exc:
+            wellness_errors.append({
+                "dataset": output_name,
+                "start_date": chunk_start.isoformat(),
+                "end_date": chunk_end.isoformat(),
+                "error": str(exc)[:500],
+            })
+    wellness[output_name] = collected
+
+(output / "wellness.json").write_text(
+    json.dumps({
+        "generated_on": date.today().isoformat(),
+        "period_start": start_date.isoformat(),
+        "period_end": end_date.isoformat(),
+        "datasets": wellness,
+        "errors": wellness_errors,
+    }, ensure_ascii=False, indent=2),
+    encoding="utf-8",
+)
+print(f"Saved wellness datasets: {', '.join(f'{k}={len(v)} chunks' for k, v in wellness.items())}")
+print(f"Wellness chunk errors: {len(wellness_errors)}")
