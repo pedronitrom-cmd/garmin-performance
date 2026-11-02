@@ -15,7 +15,7 @@ if not os.environ.get("GARMIN_PERSONAL_API_KEY"):
     raise SystemExit("Missing GARMIN_PERSONAL_API_KEY repository secret.")
 
 end_date = date.today()
-start_date = end_date - timedelta(days=90)
+start_date = end_date - timedelta(days=365)
 output = Path("output")
 output.mkdir(exist_ok=True)
 
@@ -83,9 +83,30 @@ def parse_fit(zip_path: Path):
         "sessions": sessions,
     }
 
-payload = cli_json(
-    "activities", "--start", "0", "--limit", "100",
-    "--start-date", start_date.isoformat(), "--end-date", end_date.isoformat(),
+# Fetch all pages for the selected date range. Garmin's CLI uses a zero-based
+# offset; continue until a page contains fewer than PAGE_SIZE results.
+PAGE_SIZE = 100
+payload = []
+offset = 0
+while True:
+    page = cli_json(
+        "activities", "--start", str(offset), "--limit", str(PAGE_SIZE),
+        "--start-date", start_date.isoformat(), "--end-date", end_date.isoformat(),
+    )
+    if not isinstance(page, list):
+        raise TypeError("Garmin activities response was not a JSON list.")
+    payload.extend(page)
+    if len(page) < PAGE_SIZE:
+        break
+    offset += PAGE_SIZE
+
+# Keep one copy of each activity if the API returns overlapping pages.
+unique = {}
+for activity in payload:
+    unique[str(activity["activityId"])] = activity
+payload = sorted(
+    unique.values(),
+    key=lambda item: item.get("startTimeLocal") or item.get("startTimeGMT") or "",
 )
 (output / "activities.json").write_text(
     json.dumps({
