@@ -14,23 +14,19 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
-
-      - name: Install Garmin Personal API client
-        run: python -m pip install --upgrade pip garmin-connect-personal-api-python
-
-      - name: Fetch recent Garmin activities
+      - name: Install Garmin Personal API client and FIT parser
+        run: python -m pip install --upgrade pip garmin-connect-personal-api-python fitparse
+      - name: Fetch activity summaries and detailed FIT records
         env:
           GARMIN_PERSONAL_API_KEY: ${{ secrets.GARMIN_PERSONAL_API_KEY }}
         run: python scripts/sync_garmin.py
-
-      - name: Save activity export
+      - name: Save complete Garmin export
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: garmin-activities
-          path: output/activities.json
+          name: garmin-performance-full
+          path: output/
           retention-days: 30
