@@ -121,6 +121,9 @@ if wellness_path.exists():
     def avg(vals):
         vals = [float(v) for v in vals if isinstance(v, (int,float)) and math.isfinite(v)]
         return sum(vals)/len(vals) if vals else None
+    def fmt_avg(vals, digits=0):
+        value = avg(vals)
+        return f"{value:.{digits}f}" if value is not None else "—"
     sleep_hours = {d: (x.get("sleepTimeSeconds") or 0)/3600 for d,x in sleep_rows.items() if x.get("sleepTimeSeconds")}
     sleep_score = {d: ((x.get("sleepScores") or {}).get("overall") or {}).get("value") for d,x in sleep_rows.items()}
     hrv_avg = {d: x.get("lastNightAvg") for d,x in hrv_rows.items()}
@@ -145,7 +148,7 @@ if wellness_path.exists():
         wellness_months[d[:7]].append(d)
     month_rows=[]
     for m,ds in sorted(wellness_months.items(), reverse=True):
-        month_rows.append(f'<tr><td>{m}</td><td>{avg([sleep_hours.get(d) for d in ds]):.1f} h</td><td>{avg([sleep_score.get(d) for d in ds]):.0f}</td><td>{avg([hrv_avg.get(d) for d in ds]):.0f} ms</td><td>{avg([bb.get(d) for d in ds]):.0f}</td><td>{avg([stress_avg.get(d) for d in ds]):.0f}</td><td>{avg([resting_hr.get(d) for d in ds]):.0f}</td></tr>')
+        month_rows.append(f'<tr><td>{m}</td><td>{fmt_avg([sleep_hours.get(d) for d in ds],1)} h</td><td>{fmt_avg([sleep_score.get(d) for d in ds])}</td><td>{fmt_avg([hrv_avg.get(d) for d in ds])} ms</td><td>{fmt_avg([bb.get(d) for d in ds])}</td><td>{fmt_avg([stress_avg.get(d) for d in ds])}</td><td>{fmt_avg([resting_hr.get(d) for d in ds])}</td></tr>')
     # Link each run to same-day recovery measurements (sleep ending that morning).
     run_recovery_rows = []
     for item in runs[:40]:
