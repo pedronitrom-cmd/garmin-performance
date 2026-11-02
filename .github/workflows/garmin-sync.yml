@@ -24,6 +24,8 @@ jobs:
         env:
           GARMIN_PERSONAL_API_KEY: ${{ secrets.GARMIN_PERSONAL_API_KEY }}
         run: python scripts/sync_garmin.py
+      - name: Build interactive FIT dashboard
+        run: python scripts/build_dashboard.py
       - name: Save complete Garmin export
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
