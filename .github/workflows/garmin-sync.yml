@@ -2,10 +2,14 @@ name: Garmin activity sync
 
 on:
   push:
-    branches: [main, feature/performance-intelligence-v10]
+    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: "0 8 * * *"
+
+concurrency:
+  group: garmin-sync-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
