@@ -183,9 +183,9 @@ weekly_sd = math.sqrt(sum((v-weekly_mean)**2 for v in weekly_distance)/len(weekl
 monotony = weekly_mean / weekly_sd if weekly_sd > 0 else None
 strain = weekly_mean * monotony if monotony is not None else None
 
-# Heart-rate drift approximation: split FIT records in half, compare HR and speed.
+# Split-half efficiency: compare speed/HR between the two halves of eligible FIT runs.
 # Only report when both halves have >= 10 valid paired samples and distance progression exists.
-def drift_for(item):
+def half_efficiency_for(item):
     # Ignore short activities: split-half efficiency on <5 km is too sensitive to warm-up and GPS noise.
     if not item["km"] or item["km"] < 5:
         return None
@@ -210,9 +210,9 @@ def drift_for(item):
 
 half_efficiency_samples = []
 for item in last28:
-    value = drift_for(item)
+    value = half_efficiency_for(item)
     if value is not None:
-        drift_samples.append({"date": item["date"].strftime("%d/%m/%Y"), "name": item["name"], "drift_pct": round(value, 1), "km": round(item["km"] or 0, 1)})
+        half_efficiency_samples.append({"date": item["date"].strftime("%d/%m/%Y"), "name": item["name"], "efficiency_change_pct": round(value, 1), "km": round(item["km"] or 0, 1)})
 
 # Trend interpretation is intentionally conservative and explains missing/weak evidence.
 insights = []
@@ -234,7 +234,7 @@ if load28 is None or load_prev28 is None:
     insights.append(("Carga Garmin", "A carga de treino Garmin não está preenchida em todas as atividades/períodos; a comparação de carga será exibida apenas quando houver cobertura."))
 elif load_change is not None:
     insights.append(("Carga Garmin", f"A soma de carga Garmin mudou {load_change:+.1f}% entre os blocos de 28 dias. Interprete junto com volume, intensidade e recuperação."))
-if not drift_samples:
+if not half_efficiency_samples:
     insights.append(("Variação de eficiência por metade", "Não houve amostra FIT suficiente em corridas de pelo menos 5 km para calcular a variação entre metades."))
 
 def card(label, value, sub=""):
@@ -252,8 +252,8 @@ recent_rows = "".join(
     for x in dated[-30:][::-1]
 ) or '<tr><td colspan="8">Sem atividades datadas.</td></tr>'
 drift_rows = "".join(
-    f'<tr><td>{x["date"]}</td><td>{html.escape(x["name"])}</td><td>{x["km"]:.1f} km</td><td>{x["drift_pct"]:+.1f}%</td></tr>'
-    for x in drift_samples
+    f'<tr><td>{x["date"]}</td><td>{html.escape(x["name"])}</td><td>{x["km"]:.1f} km</td><td>{x["efficiency_change_pct"]:+.1f}%</td></tr>'
+    for x in half_efficiency_samples
 ) or '<tr><td colspan="4">Sem amostras suficientes.</td></tr>'
 insight_html = "".join(
     f'<article class="insight"><h3>{html.escape(title)}</h3><p>{html.escape(body)}</p></article>'
@@ -283,7 +283,7 @@ report = {
         "distance_change_pct": distance_change, "load_change_pct": load_change,
         "efficiency_change_pct": eff_change,
     },
-    "weekly": weekly, "session_types": dict(types), "heart_rate_drift_samples": drift_samples,
+    "weekly": weekly, "session_types": dict(types), "heart_rate_half_efficiency_samples": half_efficiency_samples,
     "insights": [{"title": t, "text": b} for t,b in insights],
 }
 (ROOT / "performance_intelligence.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
