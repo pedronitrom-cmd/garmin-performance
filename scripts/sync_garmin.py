@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 import zipfile
 from datetime import date, timedelta
 from io import BytesIO
@@ -21,12 +22,29 @@ start_date = date(2024, 7, 14)
 output = Path("output")
 output.mkdir(exist_ok=True)
 
-def cli_json(*args: str):
-    result = subprocess.run(
-        ["gc-personal", "--quiet", *args],
-        check=True, capture_output=True, text=True,
-    )
-    return json.loads(result.stdout)
+def cli_json(*args: str, retries: int = 3):
+    # Garmin Connect occasionally returns transient failures/rate limits.
+    # Retry safely and preserve stderr in the final exception for diagnosis.
+    delays = (5, 15, 30)
+    last_error = None
+    for attempt in range(retries):
+        result = subprocess.run(
+            ["gc-personal", "--quiet", *args],
+            check=False, capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            try:
+                return json.loads(result.stdout)
+            except json.JSONDecodeError as exc:
+                last_error = f"Invalid JSON from gc-personal: {exc}; stderr={result.stderr[-1000:]}"
+        else:
+            last_error = (
+                f"gc-personal exited {result.returncode}; "
+                f"stderr={result.stderr[-2000:]}; stdout={result.stdout[-500:]}"
+            )
+        if attempt < retries - 1:
+            time.sleep(delays[min(attempt, len(delays) - 1)])
+    raise RuntimeError(f"Garmin CLI failed after {retries} attempts: {last_error}")
 
 def safe_value(value):
     if hasattr(value, "isoformat"):
@@ -135,11 +153,24 @@ for activity in payload:
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 archive_path = Path(tmp) / f"{activity_id}.zip"
-                subprocess.run(
-                    ["gc-personal", "--quiet", "activity-download", str(activity_id),
-                     "-o", str(archive_path), "--force"],
-                    check=True, capture_output=True, text=True,
-                )
+                download_error = None
+                for attempt, delay in enumerate((0, 5, 15), start=1):
+                    if delay:
+                        time.sleep(delay)
+                    result = subprocess.run(
+                        ["gc-personal", "--quiet", "activity-download", str(activity_id),
+                         "-o", str(archive_path), "--force"],
+                        check=False, capture_output=True, text=True,
+                    )
+                    if result.returncode == 0 and archive_path.exists():
+                        download_error = None
+                        break
+                    download_error = (
+                        f"attempt={attempt}/3 exit={result.returncode}; "
+                        f"stderr={result.stderr[-1200:]}; stdout={result.stdout[-500:]}"
+                    )
+                if download_error:
+                    raise RuntimeError(f"FIT download failed after 3 attempts: {download_error}")
                 item["fit"] = parse_fit(archive_path)
         except Exception as exc:
             item["fit_error"] = str(exc)
