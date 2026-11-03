@@ -153,11 +153,24 @@ for activity in payload:
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 archive_path = Path(tmp) / f"{activity_id}.zip"
-                subprocess.run(
-                    ["gc-personal", "--quiet", "activity-download", str(activity_id),
-                     "-o", str(archive_path), "--force"],
-                    check=True, capture_output=True, text=True,
-                )
+                download_error = None
+                for attempt, delay in enumerate((0, 5, 15), start=1):
+                    if delay:
+                        time.sleep(delay)
+                    result = subprocess.run(
+                        ["gc-personal", "--quiet", "activity-download", str(activity_id),
+                         "-o", str(archive_path), "--force"],
+                        check=False, capture_output=True, text=True,
+                    )
+                    if result.returncode == 0 and archive_path.exists():
+                        download_error = None
+                        break
+                    download_error = (
+                        f"attempt={attempt}/3 exit={result.returncode}; "
+                        f"stderr={result.stderr[-1200:]}; stdout={result.stdout[-500:]}"
+                    )
+                if download_error:
+                    raise RuntimeError(f"FIT download failed after 3 attempts: {download_error}")
                 item["fit"] = parse_fit(archive_path)
         except Exception as exc:
             item["fit_error"] = str(exc)
