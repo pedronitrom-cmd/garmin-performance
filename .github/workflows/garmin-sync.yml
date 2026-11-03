@@ -2,7 +2,7 @@ name: Garmin activity sync
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/performance-intelligence-v10]
   workflow_dispatch:
   schedule:
     - cron: "0 8 * * *"
