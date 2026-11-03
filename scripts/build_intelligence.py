@@ -168,6 +168,79 @@ if wellness_path.exists():
                 rows += sum(len(v) for v in data.values() if isinstance(v, list))
         wellness_counts[key] = {"chunks": len(chunks), "rows": rows}
 
+
+# Recovery trends from Garmin wellness data. Averages use only days with measurements.
+recovery = {"as_of": None, "metrics": {}}
+if wellness_path.exists():
+    wellness = json.loads(wellness_path.read_text(encoding="utf-8"))
+    def flatten_wellness(name, list_key=None):
+        rows = []
+        for chunk in wellness.get("datasets", {}).get(name, []):
+            data = chunk.get("data")
+            if isinstance(data, list):
+                rows.extend(data)
+            elif isinstance(data, dict):
+                if list_key and isinstance(data.get(list_key), list):
+                    rows.extend(data[list_key])
+                else:
+                    for value in data.values():
+                        if isinstance(value, list):
+                            rows.extend(value)
+        return rows
+    sleep_by_date = {x.get("calendarDate"): x for x in flatten_wellness("sleep_summaries") if x.get("calendarDate")}
+    hrv_by_date = {x.get("calendarDate"): x for x in flatten_wellness("hrv_summaries", "hrvSummaries") if x.get("calendarDate")}
+    daily_by_date = {x.get("calendarDate"): x for x in flatten_wellness("daily_summaries", "data") if x.get("calendarDate")}
+    wellness_dates = sorted(set(sleep_by_date) | set(hrv_by_date) | set(daily_by_date))
+    recovery["as_of"] = wellness_dates[-1] if wellness_dates else None
+    metric_maps = {
+        "sleep_hours": {d: number(x.get("sleepTimeSeconds")) / 3600 for d,x in sleep_by_date.items() if number(x.get("sleepTimeSeconds")) is not None},
+        "sleep_score": {d: number(((x.get("sleepScores") or {}).get("overall") or {}).get("value")) for d,x in sleep_by_date.items()},
+        "hrv_ms": {d: number(x.get("lastNightAvg")) for d,x in hrv_by_date.items()},
+        "resting_hr": {d: number(((x.get("heartRate") or {}).get("restingValue"))) for d,x in daily_by_date.items()},
+        "body_battery": {d: number(((x.get("bodyBattery") or {}).get("latestValue"))) for d,x in daily_by_date.items()},
+        "stress_avg": {d: number(((x.get("stress") or {}).get("avgLevel"))) for d,x in daily_by_date.items()},
+    }
+    if recovery["as_of"]:
+        wellness_latest = date.fromisoformat(recovery["as_of"])
+        windows = {
+            "last_7_days": (wellness_latest - timedelta(days=6), wellness_latest),
+            "last_28_days": (wellness_latest - timedelta(days=27), wellness_latest),
+            "previous_28_days": (wellness_latest - timedelta(days=55), wellness_latest - timedelta(days=28)),
+        }
+        for key, values in metric_maps.items():
+            valid = [(date.fromisoformat(d), v) for d,v in values.items() if v is not None]
+            latest_value = max(valid, default=(None, None), key=lambda z: z[0])
+            item = {"latest_date": latest_value[0].isoformat() if latest_value[0] else None, "latest": latest_value[1]}
+            for window_name, (start, end) in windows.items():
+                samples = [v for day,v in valid if start <= day <= end]
+                item[window_name] = {"average": round(sum(samples)/len(samples), 2) if samples else None, "days": len(samples)}
+            current = item["last_28_days"]["average"]
+            previous = item["previous_28_days"]["average"]
+            item["change_pct"] = pct_change(current, previous)
+            recovery["metrics"][key] = item
+
+recovery_labels = {
+    "sleep_hours": ("Sono médio", "h", 1),
+    "sleep_score": ("Score de sono", "pts", 0),
+    "hrv_ms": ("VFC noturna", "ms", 0),
+    "resting_hr": ("FC de repouso", "bpm", 0),
+    "body_battery": ("Body Battery", "pts", 0),
+    "stress_avg": ("Estresse médio", "pts", 0),
+}
+recovery_rows = ""
+for key, (label, unit, digits) in recovery_labels.items():
+    item = recovery["metrics"].get(key, {})
+    current = item.get("last_28_days", {}).get("average")
+    previous = item.get("previous_28_days", {}).get("average")
+    latest_value = item.get("latest")
+    fmt = lambda v: f"{v:.{digits}f} {unit}" if v is not None else "—"
+    change = item.get("change_pct")
+    change_text = f"{change:+.1f}%" if change is not None else "—"
+    days = item.get("last_28_days", {}).get("days", 0)
+    recovery_rows += f'<tr><td>{label}</td><td>{fmt(latest_value)}</td><td>{fmt(current)}</td><td>{fmt(previous)}</td><td>{change_text}</td><td>{days}</td></tr>'
+if not recovery_rows:
+    recovery_rows = '<tr><td colspan="6">Sem dados de recuperação disponíveis.</td></tr>'
+
 load7 = total_load(last7)
 load28 = total_load(last28)
 load_prev28 = total_load(prev28)
@@ -283,7 +356,7 @@ report = {
         "distance_change_pct": distance_change, "load_change_pct": load_change,
         "efficiency_change_pct": eff_change,
     },
-    "weekly": weekly, "session_types": dict(types), "heart_rate_half_efficiency_samples": half_efficiency_samples,
+    "weekly": weekly, "session_types": dict(types), "heart_rate_half_efficiency_samples": half_efficiency_samples, "recovery": recovery,
     "insights": [{"title": t, "text": b} for t,b in insights],
 }
 (ROOT / "performance_intelligence.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -304,6 +377,7 @@ html_doc = f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><me
 {card("Monotonia semanal",fmt_num(monotony,2),"Média/desvio do volume nas últimas 4 semanas disponíveis")}
 {card("Strain semanal",fmt_num(strain,1),"Volume médio × monotonia; indicador descritivo")}
 </div>
+<section class="panel"><h2>Recuperação e prontidão · tendências Garmin</h2><p>Último dia com dados: {html.escape(recovery.get("as_of") or "—")}. As médias consideram apenas dias medidos; a variação compara os últimos 28 dias com os 28 anteriores.</p><div class="table-wrap"><table><thead><tr><th>Indicador</th><th>Último valor</th><th>Média 28d</th><th>28d anteriores</th><th>Variação</th><th>Dias</th></tr></thead><tbody>{recovery_rows}</tbody></table></div><p class="note">VFC, sono, Body Battery e estresse são sinais contextuais. Compare tendências individuais, não use um único valor para decidir intensidade ou diagnosticar fadiga.</p></section>
 <section><h2>Leitura automática</h2><div class="insights">{insight_html}</div></section>
 <section class="panel"><h2>Qualidade e integridade dos dados</h2><p>Auditoria do conjunto recebido. Ausência de um campo não é convertida em zero nem preenchida por estimativa.</p>
 <div class="grid">
