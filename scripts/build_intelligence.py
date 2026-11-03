@@ -186,6 +186,9 @@ strain = weekly_mean * monotony if monotony is not None else None
 # Heart-rate drift approximation: split FIT records in half, compare HR and speed.
 # Only report when both halves have >= 10 valid paired samples and distance progression exists.
 def drift_for(item):
+    # Ignore short activities: split-half efficiency on <5 km is too sensitive to warm-up and GPS noise.
+    if not item["km"] or item["km"] < 5:
+        return None
     recs = item["records"]
     paired = []
     for r in recs:
@@ -205,7 +208,7 @@ def drift_for(item):
     ef2 = median([p[2] / p[1] for p in second])
     return (ef2 / ef1 - 1) * 100 if ef1 else None
 
-drift_samples = []
+half_efficiency_samples = []
 for item in last28:
     value = drift_for(item)
     if value is not None:
@@ -232,7 +235,7 @@ if load28 is None or load_prev28 is None:
 elif load_change is not None:
     insights.append(("Carga Garmin", f"A soma de carga Garmin mudou {load_change:+.1f}% entre os blocos de 28 dias. Interprete junto com volume, intensidade e recuperação."))
 if not drift_samples:
-    insights.append(("Deriva cardíaca", "Não houve amostra FIT suficiente para estimar deriva em treinos recentes. O cálculo só aparece quando há registros pareados de velocidade e FC em quantidade adequada."))
+    insights.append(("Variação de eficiência por metade", "Não houve amostra FIT suficiente em corridas de pelo menos 5 km para calcular a variação entre metades."))
 
 def card(label, value, sub=""):
     return f'<article class="card"><div class="label">{html.escape(label)}</div><div class="value">{value}</div><div class="sub">{html.escape(sub)}</div></article>'
@@ -316,7 +319,7 @@ html_doc = f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><me
 <div class="pill">Período: {html.escape(str(payload.get("period_start") or "—"))} a {html.escape(str(payload.get("period_end") or "—"))}</div>
 </section>
 <section><h2>Volume e carga por semana</h2><div class="panel"><div class="table-wrap"><table><thead><tr><th>Semana ISO</th><th>Distância</th><th>Sessões</th><th>Carga Garmin</th><th>Cobertura da carga</th></tr></thead><tbody>{weekly_rows}</tbody></table></div><p class="note">A semana é agrupada de segunda a domingo. Semanas parciais no início/fim do histórico podem ter volume incompleto.</p></div></section>
-<section><h2>Deriva cardíaca estimada por FIT</h2><div class="panel"><div class="table-wrap"><table><thead><tr><th>Data</th><th>Treino</th><th>Distância</th><th>Variação EF 2ª metade vs. 1ª</th></tr></thead><tbody>{drift_rows}</tbody></table></div><p class="note">Estimativa exploratória: compara velocidade/FC entre metades do treino. Inclinações, acelerações, intervalados, pausas e falhas de GPS podem distorcer o resultado. Não equivale a teste laboratorial de deriva cardíaca.</p></div></section>
+<section><h2>Variação de eficiência na segunda metade (FIT)</h2><div class="panel"><div class="table-wrap"><table><thead><tr><th>Data</th><th>Treino</th><th>Distância</th><th>Variação velocidade/FC · 2ª metade vs. 1ª</th></tr></thead><tbody>{drift_rows}</tbody></table></div><p class="note">Indicador exploratório da mudança de velocidade por batimento entre as metades. Agora só inclui corridas de pelo menos 5 km e FIT com amostra pareada suficiente. Percurso, acelerações, intervalados, pausas e GPS podem distorcer o resultado; valores negativos não significam necessariamente fadiga nem positivos significam melhora fisiológica.</p></div></section>
 <section><h2>Tipos de sessão identificados</h2><div class="panel"><div class="table-wrap"><table><thead><tr><th>Categoria</th><th>Sessões</th></tr></thead><tbody>{"".join(f"<tr><td>{html.escape(k)}</td><td>{v}</td></tr>" for k,v in sorted(types.items())) or "<tr><td colspan='2'>Sem dados</td></tr>"}</tbody></table></div><p class="note">A classificação usa o nome da atividade e uma regra simples de distância. Confira os rótulos antes de usar para decisões de treino.</p></div></section>
 <section><h2>Últimas 30 corridas</h2><div class="panel"><div class="table-wrap"><table><thead><tr><th>Data</th><th>Atividade</th><th>Tipo</th><th>Distância</th><th>Ritmo</th><th>FC média</th><th>Carga</th><th>Registros FIT</th></tr></thead><tbody>{recent_rows}</tbody></table></div></div></section>
 <section><h2>Cobertura de recuperação</h2><div class="panel"><div class="table-wrap"><table><thead><tr><th>Dataset</th><th>Blocos mensais</th><th>Linhas retornadas</th></tr></thead><tbody>{wellness_rows}</tbody></table></div><p class="note">Erros de consultas wellness registrados: {wellness_errors}. A presença de blocos/linhas não garante que todos os dias tenham medições completas.</p></div></section>
