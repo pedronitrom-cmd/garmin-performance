@@ -58,7 +58,7 @@ for activity in activities:
         "id": aid, "date": dt, "name": activity.get("activityName") or "Corrida",
         "km": km, "duration_s": duration, "hr": hr, "max_hr": number(activity.get("maxHR")),
         "load": load, "pace_s": pace_sec, "speed_mps": speed,
-        "records": (fit.get("records") or []), "fit_count": number(fit.get("record_count")) or 0,
+        "records": (fit.get("records") or []), "laps": (fit.get("laps") or []), "fit_count": number(fit.get("record_count")) or 0,
         "fit_error": detail.get("fit_error"), "detail_error": detail.get("detail_error"),
         "activity": activity,
     })
@@ -287,6 +287,83 @@ for item in last28:
     if value is not None:
         half_efficiency_samples.append({"date": item["date"].strftime("%d/%m/%Y"), "name": item["name"], "efficiency_change_pct": round(value, 1), "km": round(item["km"] or 0, 1)})
 
+# Structured interval analysis from FIT laps. Fast segments are detected from lap pace
+# and distance; contiguous fast laps are grouped into one work block (e.g. 2x2 km
+# recorded as four consecutive 1 km laps). This is descriptive and avoids relying
+# only on activity names or whole-session average pace.
+def interval_analysis(item):
+    if classify(item) != "Intervalado" or not item["laps"]:
+        return None
+    segments = []
+    for index, lap in enumerate(item["laps"]):
+        distance = number(lap.get("total_distance"))
+        elapsed = number(lap.get("total_timer_time")) or number(lap.get("total_elapsed_time"))
+        if not distance or not elapsed or distance < 400 or distance > 1100:
+            continue
+        pace = elapsed / (distance / 1000)
+        if pace > 285 or pace < 150:
+            continue
+        segments.append({
+            "lap": index + 1, "distance_m": round(distance, 1),
+            "duration_s": round(elapsed, 1), "pace_s_km": round(pace, 1),
+            "avg_hr": number(lap.get("avg_heart_rate")),
+            "max_hr": number(lap.get("max_heart_rate")),
+            "avg_power": number(lap.get("avg_power")),
+            "trigger": lap.get("lap_trigger"),
+        })
+    if not segments:
+        return None
+    # Group only consecutive FIT laps. Any recovery/warm-up lap breaks the block.
+    blocks = []
+    for segment in segments:
+        if blocks and segment["lap"] == blocks[-1]["last_lap"] + 1:
+            block = blocks[-1]
+            block["distance_m"] += segment["distance_m"]
+            block["duration_s"] += segment["duration_s"]
+            block["last_lap"] = segment["lap"]
+            block["segments"] += 1
+            if segment["avg_hr"] is not None:
+                block["hr_values"].append(segment["avg_hr"])
+            if segment["avg_power"] is not None:
+                block["power_values"].append(segment["avg_power"])
+        else:
+            blocks.append({
+                "first_lap": segment["lap"], "last_lap": segment["lap"],
+                "distance_m": segment["distance_m"], "duration_s": segment["duration_s"],
+                "segments": 1,
+                "hr_values": [segment["avg_hr"]] if segment["avg_hr"] is not None else [],
+                "power_values": [segment["avg_power"]] if segment["avg_power"] is not None else [],
+            })
+    for block in blocks:
+        block["distance_m"] = round(block["distance_m"], 1)
+        block["duration_s"] = round(block["duration_s"], 1)
+        block["pace_s_km"] = round(block["duration_s"] / (block["distance_m"] / 1000), 1)
+        block["avg_hr"] = round(sum(block["hr_values"]) / len(block["hr_values"]), 1) if block["hr_values"] else None
+        block["avg_power"] = round(sum(block["power_values"]) / len(block["power_values"]), 1) if block["power_values"] else None
+        del block["hr_values"]
+        del block["power_values"]
+    paces = [x["pace_s_km"] for x in blocks]
+    total_distance = sum(x["distance_m"] for x in blocks)
+    total_duration = sum(x["duration_s"] for x in blocks)
+    # Recovery is the elapsed time in intervening laps between work blocks.
+    recoveries = []
+    for left, right in zip(blocks, blocks[1:]):
+        gap = [lap for i, lap in enumerate(item["laps"], start=1) if left["last_lap"] < i < right["first_lap"]]
+        seconds = sum((number(x.get("total_elapsed_time")) or number(x.get("total_timer_time")) or 0) for x in gap)
+        if seconds > 0:
+            recoveries.append(round(seconds, 1))
+    return {
+        "date": item["date"].strftime("%Y-%m-%d"), "name": item["name"],
+        "activity_id": item["id"], "total_work_km": round(total_distance / 1000, 2),
+        "work_duration_s": round(total_duration, 1),
+        "average_work_pace_s_km": round(total_duration / (total_distance / 1000), 1),
+        "blocks": blocks, "recoveries_s": recoveries,
+        "pace_range_s_km": [round(min(paces), 1), round(max(paces), 1)],
+        "pace_spread_pct": round((max(paces) / min(paces) - 1) * 100, 1) if len(paces) > 1 and min(paces) > 0 else 0,
+    }
+
+interval_sessions = [x for x in (interval_analysis(item) for item in dated) if x]
+
 # Trend interpretation is intentionally conservative and explains missing/weak evidence.
 insights = []
 if distance_change is not None:
@@ -356,7 +433,7 @@ report = {
         "distance_change_pct": distance_change, "load_change_pct": load_change,
         "efficiency_change_pct": eff_change,
     },
-    "weekly": weekly, "session_types": dict(types), "heart_rate_half_efficiency_samples": half_efficiency_samples, "recovery": recovery,
+    "weekly": weekly, "session_types": dict(types), "heart_rate_half_efficiency_samples": half_efficiency_samples, "interval_sessions": interval_sessions, "recovery": recovery,
     "insights": [{"title": t, "text": b} for t,b in insights],
 }
 (ROOT / "performance_intelligence.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -394,6 +471,7 @@ html_doc = f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><me
 </section>
 <section><h2>Volume e carga por semana</h2><div class="panel"><div class="table-wrap"><table><thead><tr><th>Semana ISO</th><th>Distância</th><th>Sessões</th><th>Carga Garmin</th><th>Cobertura da carga</th></tr></thead><tbody>{weekly_rows}</tbody></table></div><p class="note">A semana é agrupada de segunda a domingo. Semanas parciais no início/fim do histórico podem ter volume incompleto.</p></div></section>
 <section><h2>Variação de eficiência na segunda metade (FIT)</h2><div class="panel"><div class="table-wrap"><table><thead><tr><th>Data</th><th>Treino</th><th>Distância</th><th>Variação velocidade/FC · 2ª metade vs. 1ª</th></tr></thead><tbody>{drift_rows}</tbody></table></div><p class="note">Indicador exploratório da mudança de velocidade por batimento entre as metades. Agora só inclui corridas de pelo menos 5 km e FIT com amostra pareada suficiente. Percurso, acelerações, intervalados, pausas e GPS podem distorcer o resultado; valores negativos não significam necessariamente fadiga nem positivos significam melhora fisiológica.</p></div></section>
+<section><h2>Intervalados · análise por repetição</h2><div class="panel"><p class="note">Repetições extraídas das voltas FIT. Blocos consecutivos são agrupados para reconhecer, por exemplo, 2 × 2 km registrados como quatro voltas de 1 km. A identificação depende da qualidade das voltas e pode exigir conferência do treino.</p><div class="table-wrap"><table><thead><tr><th>Data</th><th>Treino</th><th>Blocos</th><th>Distância forte</th><th>Ritmo médio forte</th><th>Faixa de ritmo</th><th>Variação entre blocos</th></tr></thead><tbody>{interval_sessions.slice(-12).reverse().map(x => `<tr><td>${x.date}</td><td>${html.escape(x.name)}</td><td>${x.blocks.length}</td><td>${x.total_work_km.toFixed(2)} km</td><td>${fmt_pace(x.average_work_pace_s_km)}</td><td>${fmt_pace(x.pace_range_s_km[0])} – ${fmt_pace(x.pace_range_s_km[1])}</td><td>${x.pace_spread_pct.toFixed(1)}%</td></tr>`).join("") || '<tr><td colspan="7">Sem voltas FIT elegíveis em treinos intervalados.</td></tr>'}</tbody></table></div></div></section>
 <section><h2>Tipos de sessão identificados</h2><div class="panel"><div class="table-wrap"><table><thead><tr><th>Categoria</th><th>Sessões</th></tr></thead><tbody>{"".join(f"<tr><td>{html.escape(k)}</td><td>{v}</td></tr>" for k,v in sorted(types.items())) or "<tr><td colspan='2'>Sem dados</td></tr>"}</tbody></table></div><p class="note">A classificação usa o nome da atividade e uma regra simples de distância. Confira os rótulos antes de usar para decisões de treino.</p></div></section>
 <section><h2>Últimas 30 corridas</h2><div class="panel"><div class="table-wrap"><table><thead><tr><th>Data</th><th>Atividade</th><th>Tipo</th><th>Distância</th><th>Ritmo</th><th>FC média</th><th>Carga</th><th>Registros FIT</th></tr></thead><tbody>{recent_rows}</tbody></table></div></div></section>
 <section><h2>Cobertura de recuperação</h2><div class="panel"><div class="table-wrap"><table><thead><tr><th>Dataset</th><th>Blocos mensais</th><th>Linhas retornadas</th></tr></thead><tbody>{wellness_rows}</tbody></table></div><p class="note">Erros de consultas wellness registrados: {wellness_errors}. A presença de blocos/linhas não garante que todos os dias tenham medições completas.</p></div></section>
