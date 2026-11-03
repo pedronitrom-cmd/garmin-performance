@@ -198,7 +198,7 @@ if wellness_path.exists():
         "hrv_ms": {d: number(x.get("lastNightAvg")) for d,x in hrv_by_date.items()},
         "resting_hr": {d: number(((x.get("heartRate") or {}).get("restingValue"))) for d,x in daily_by_date.items()},
         "body_battery": {d: number(((x.get("bodyBattery") or {}).get("latestValue"))) for d,x in daily_by_date.items()},
-        "stress_avg": {d: number(((x.get("stress") or {}).get("avgLevel"))) for d,x in daily_by_date.items()},
+        "stress_avg": {d: number(((x.get("stress") or {}).get("avgLevel"))) for d,x in daily_by_date.items() if number(((x.get("stress") or {}).get("avgLevel"))) is not None and number(((x.get("stress") or {}).get("avgLevel"))) >= 0},
     }
     if recovery["as_of"]:
         wellness_latest = date.fromisoformat(recovery["as_of"])
