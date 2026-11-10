@@ -28,6 +28,14 @@ def cli_json(*args: str):
     )
     return json.loads(result.stdout)
 
+def error_text(exc):
+    if isinstance(exc, subprocess.CalledProcessError):
+        detail = (exc.stderr or exc.stdout or "").strip()
+        if detail:
+            return f"{exc} | CLI output: {detail[:1200]}"
+    return str(exc)
+
+
 def safe_value(value):
     if hasattr(value, "isoformat"):
         return value.isoformat()
@@ -129,7 +137,7 @@ for activity in payload:
     try:
         item["detail"] = cli_json("activity", str(activity_id))
     except Exception as exc:
-        item["detail_error"] = str(exc)
+        item["detail_error"] = error_text(exc)
 
     if sport in ("running", "treadmill_running"):
         try:
@@ -142,7 +150,7 @@ for activity in payload:
                 )
                 item["fit"] = parse_fit(archive_path)
         except Exception as exc:
-            item["fit_error"] = str(exc)
+            item["fit_error"] = error_text(exc)
 
     details.append(item)
 
@@ -156,10 +164,10 @@ detail_failed = [x for x in details if x.get("detail_error")]
 print(f"Saved {len(payload)} activities and {len(details)} detail records.")
 print(f"Activities with FIT records: {fit_ok}; FIT download failures: {len(fit_failed)}")
 for item in fit_failed[:12]:
-    print(f"FIT_FAILURE activity={item['activity_id']} name={item.get('name')!r}: {item['fit_error'][:350]}")
+    print(f"FIT_FAILURE activity={item['activity_id']} name={item.get('name')!r}: {item['fit_error'][:1400]}")
 print(f"Activity detail failures: {len(detail_failed)}")
 for item in detail_failed[:8]:
-    print(f"DETAIL_FAILURE activity={item['activity_id']}: {item['detail_error'][:350]}")
+    print(f"DETAIL_FAILURE activity={item['activity_id']}: {item['detail_error'][:1400]}")
 
 
 # Wellness and recovery metrics, collected in monthly chunks to keep requests
@@ -204,7 +212,7 @@ for output_name, command in wellness_commands.items():
                 "dataset": output_name,
                 "start_date": chunk_start.isoformat(),
                 "end_date": chunk_end.isoformat(),
-                "error": str(exc)[:500],
+                "error": error_text(exc)[:1500],
             })
     wellness[output_name] = collected
 
@@ -221,4 +229,4 @@ for output_name, command in wellness_commands.items():
 print(f"Saved wellness datasets: {', '.join(f'{k}={len(v)} chunks' for k, v in wellness.items())}")
 print(f"Wellness chunk errors: {len(wellness_errors)}")
 for item in wellness_errors[:15]:
-    print(f"WELLNESS_FAILURE dataset={item['dataset']} period={item['start_date']}..{item['end_date']}: {item['error'][:350]}")
+    print(f"WELLNESS_FAILURE dataset={item['dataset']} period={item['start_date']}..{item['end_date']}: {item['error'][:1400]}")
