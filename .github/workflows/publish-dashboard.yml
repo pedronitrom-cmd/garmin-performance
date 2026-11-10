@@ -43,7 +43,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout --orphan publish
           git rm -rf . >/dev/null 2>&1 || true
-          cp -R site/. .
-          git add .
+          cp site/index.html .
+          cp site/README.txt README.txt
+          if [ -f site/analysis.html ]; then cp site/analysis.html .; fi
+          rm -rf artifact site
+          git add index.html analysis.html README.txt
           git commit -m "Publish Garmin dashboard"
           git push --force origin publish
