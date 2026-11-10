@@ -4,6 +4,8 @@ import json
 import os
 import subprocess
 import tempfile
+import time
+import re
 import zipfile
 from datetime import date, timedelta
 from io import BytesIO
@@ -21,11 +23,25 @@ start_date = date(2024, 7, 14)
 output = Path("output")
 output.mkdir(exist_ok=True)
 
+def run_cli(args: list[str], attempts: int = 6):
+    for attempt in range(attempts):
+        try:
+            return subprocess.run(
+                ["gc-personal", "--quiet", *args],
+                check=True, capture_output=True, text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stderr or exc.stdout or "")
+            if "HTTP 429" not in output_text or attempt == attempts - 1:
+                raise
+            match = re.search(r'"retryInSeconds"\\s*:\\s*(\\d+)', output_text)
+            wait_seconds = int(match.group(1)) + 2 if match else min(30 * (attempt + 1), 120)
+            print(f"Garmin rate limit (429). Waiting {wait_seconds}s before retry {attempt + 2}/{attempts}.")
+            time.sleep(wait_seconds)
+    raise RuntimeError("Garmin CLI retry loop exhausted.")
+
 def cli_json(*args: str):
-    result = subprocess.run(
-        ["gc-personal", "--quiet", *args],
-        check=True, capture_output=True, text=True,
-    )
+    result = run_cli(list(args))
     return json.loads(result.stdout)
 
 def error_text(exc):
@@ -143,10 +159,8 @@ for activity in payload:
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 archive_path = Path(tmp) / f"{activity_id}.zip"
-                subprocess.run(
-                    ["gc-personal", "--quiet", "activity-download", str(activity_id),
-                     "-o", str(archive_path), "--force"],
-                    check=True, capture_output=True, text=True,
+                run_cli(
+                    ["activity-download", str(activity_id), "-o", str(archive_path), "--force"]
                 )
                 item["fit"] = parse_fit(archive_path)
         except Exception as exc:
