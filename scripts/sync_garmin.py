@@ -150,8 +150,16 @@ for activity in payload:
     json.dumps(details, ensure_ascii=False, indent=2),
     encoding="utf-8",
 )
+fit_ok = sum(1 for x in details if x.get("fit", {}).get("record_count", 0))
+fit_failed = [x for x in details if x.get("fit_error")]
+detail_failed = [x for x in details if x.get("detail_error")]
 print(f"Saved {len(payload)} activities and {len(details)} detail records.")
-print(f"Activities with FIT records: {sum(1 for x in details if x.get('fit', {}).get('record_count', 0))}")
+print(f"Activities with FIT records: {fit_ok}; FIT download failures: {len(fit_failed)}")
+for item in fit_failed[:12]:
+    print(f"FIT_FAILURE activity={item['activity_id']} name={item.get('name')!r}: {item['fit_error'][:350]}")
+print(f"Activity detail failures: {len(detail_failed)}")
+for item in detail_failed[:8]:
+    print(f"DETAIL_FAILURE activity={item['activity_id']}: {item['detail_error'][:350]}")
 
 
 # Wellness and recovery metrics, collected in monthly chunks to keep requests
@@ -212,3 +220,5 @@ for output_name, command in wellness_commands.items():
 )
 print(f"Saved wellness datasets: {', '.join(f'{k}={len(v)} chunks' for k, v in wellness.items())}")
 print(f"Wellness chunk errors: {len(wellness_errors)}")
+for item in wellness_errors[:15]:
+    print(f"WELLNESS_FAILURE dataset={item['dataset']} period={item['start_date']}..{item['end_date']}: {item['error'][:350]}")
