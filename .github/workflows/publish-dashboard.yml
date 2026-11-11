@@ -35,6 +35,7 @@ jobs:
           mkdir site
           cp artifact/dashboard.html site/index.html
           if [ -f artifact/analysis.html ]; then cp artifact/analysis.html site/analysis.html; fi
+          if [ -f artifact/performance.html ]; then cp artifact/performance.html site/performance.html; fi
           printf 'Garmin Performance dashboard publication.\\n' > site/README.txt
 
       - name: Publish site branch
@@ -46,7 +47,9 @@ jobs:
           cp site/index.html .
           cp site/README.txt README.txt
           if [ -f site/analysis.html ]; then cp site/analysis.html .; fi
+          if [ -f site/performance.html ]; then cp site/performance.html .; fi
           rm -rf artifact site
-          git add index.html analysis.html README.txt
+          git add index.html README.txt
+          for f in analysis.html performance.html; do if [ -f "$f" ]; then git add "$f"; fi; done
           git commit -m "Publish Garmin dashboard"
           git push --force origin publish
