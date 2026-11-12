@@ -199,7 +199,7 @@ const pill=(k,extra='')=>`<span class="pill"><i style="background:${CATC[k]||NEU
 
 /* ============ dados ============ */
 let ACTS=[],REC={m:[],r:[],k:{}},SRC='Garmin Connect (sync automático)';
-const S={page:'resumo',range:'12m',hrmax:190,hrrest:45,cat:'',q:'',sort:'ms',desc:true,all:false,cmp:'28d',race:''};
+const S={page:'resumo',range:'12m',hrmax:190,hrrest:45,cat:'',q:'',sort:'ms',desc:true,all:false,cmp:'28d',race:'',xrace:'',dpw:5,goal:{d:'10k',t:'38:30',date:''}};
 
 function classify(a){const t=norm(a.title);
  if(/simulador/.test(t))return'Limiar/Ritmo';
@@ -700,16 +700,137 @@ function pgPre(){const races=ACTS.filter(isRaceAct).sort((a,b)=>a.ms-b.ms);
  const all=`<div class="card mt"><h4>Todas as provas lado a lado</h4><p class="sub">Resultado contra o seu nível e as condições na largada. ▲ verde = mais rápido que o seu nível.</p><div class="sc"><table><thead><tr><th class="l">Data</th><th class="l">Prova</th><th>km</th><th>Tempo</th><th>vs nível</th><th>TSB</th><th>Volume sem.</th><th>Últ. forte</th><th>Sono</th><th>VFC</th><th>2ª metade</th></tr></thead><tbody>${tr}</tbody></table></div></div>`;
  return sel+hero+sech('O que aconteceu antes')+`<div class="ev">${ev.map(e=>`<div class="card ${e.sev}"><h4><span>${ic[e.sev]}</span>${e.title}<span class="badge">${e.tag}</span></h4><p>${e.text}</p></div>`).join('')}</div>`+tl+sech('O que se repete nas suas melhores provas')+pat+all}
 
+/* ---------- meta, plano e execução de prova ---------- */
+const GD={'5k':['5 km',5000],'10k':['10 km',10000],'21k':['Meia maratona',21097.5],'42k':['Maratona',42195]};
+function goalInit(){try{const g=JSON.parse(localStorage.getItem('gp_goal')||'null');if(g&&g.d&&g.t)S.goal=Object.assign(S.goal,g)}catch(e){}}
+function goalSave(){try{localStorage.setItem('gp_goal',JSON.stringify(S.goal))}catch(e){}}
+function bindCtl(){document.querySelectorAll('[data-g]').forEach(el=>el.onchange=()=>{S.goal[el.dataset.g]=el.value;goalSave();const y=scrollY;render();scrollTo(0,y)});
+ document.querySelectorAll('[data-sx]').forEach(el=>el.onchange=()=>{S[el.dataset.sx]=el.value;const y=scrollY;render();scrollTo(0,y)})}
+function vdotOf(m,sec){const t=sec/60,v=m/t,o=-4.6+.182258*v+.000104*v*v,f=.8+.1894393*Math.exp(-.012778*t)+.2989558*Math.exp(-.1932605*t);return o/f}
+function paceAt(V,pct){let lo=50,hi=500;for(let i=0;i<60;i++){const v=(lo+hi)/2,o=-4.6+.182258*v+.000104*v*v;if(o<V*pct)lo=v;else hi=v}return 60000/((lo+hi)/2)}
+function timeAt(V,m){let lo=3,hi=600;for(let i=0;i<80;i++){const t=(lo+hi)/2;if(vdotOf(m,t*60)>V)lo=t;else hi=t}return(lo+hi)/2*60}
+function parseT(s){const p=String(s).trim().split(':').map(Number);if(!p.length||p.some(x=>!isFinite(x)))return null;return p.length===3?p[0]*3600+p[1]*60+p[2]:p.length===2?p[0]*60+p[1]:null}
+const raceV=r=>vdotOf(r.km*1000,r.sec);
+function curVdot(){const N=NOW(),rs=ACTS.filter(a=>isRaceAct(a)&&a.km<=25&&a.ms>=N-180*DAY).map(r=>({r,v:raceV(r)})).sort((a,b)=>b.v-a.v);return rs[0]||null}
+function goalCtl(){const g=S.goal,gd=GD[g.d]||GD['10k'],ts=parseT(g.t);return`<div class="ctl" style="margin-bottom:14px"><span>Meta:</span><select data-g="d">${Object.entries(GD).map(([k,v])=>`<option value="${k}"${g.d===k?' selected':''}>${v[0]}</option>`).join('')}</select><span>em</span><input type="text" data-g="t" value="${esc(g.t)}" style="width:92px" aria-label="Tempo alvo" placeholder="38:30"><span>prova em</span><input type="date" data-g="date" value="${esc(g.date||'')}" style="background:var(--s2);color:var(--tx);border:1px solid var(--bd2);border-radius:8px;padding:5px 8px"><span class="note" style="margin:0">${ts?'':'Tempo inválido: use mm:ss ou h:mm:ss. '}Fica salvo neste navegador.</span></div>`}
+function mondayKm(n){const W=weeklyAll();return W.slice(-(n+1),-1).map(w=>w.km)}
+
+function pgMeta(){const N=NOW(),g=S.goal,gd=GD[g.d]||GD['10k'],ts=parseT(g.t),cv=curVdot();
+ if(!cv)return goalCtl()+'<p class="note">Sem provas recentes para estimar o seu nível.</p>';
+ const Vc=cv.v,ctl=goalCtl();if(!ts)return ctl+'<p class="note">Informe um tempo válido para ver a projeção.</p>';
+ const Vt=vdotOf(gd[1],ts),pred=timeAt(Vc,gd[1]),gap=pred-ts,pct=(Vt/Vc-1)*100;
+ const races=ACTS.filter(a=>isRaceAct(a)&&a.km<=25).sort((a,b)=>a.ms-b.ms),pv=races.filter(r=>r.ms>=N-545*DAY&&r.ms<=N-365*DAY).map(r=>({r,v:raceV(r)})).sort((a,b)=>b.v-a.v)[0];
+ let rate=null;if(pv){const mo=(cv.r.ms-pv.r.ms)/(30.4*DAY);if(mo>3)rate=(Vc-pv.v)/mo}
+ const rateU=rate!=null&&rate>.15?rate:null;
+ const months=Vt>Vc&&rateU?(Vt-Vc)/rateU:null;
+ const big=gap>0?`<div class="bigv"><b>−${fmtT(gap)}</b><span>a cortar do seu nível atual</span></div>`:`<div class="bigv"><b>+${fmtT(-gap)}</b><span>de folga: meta ao alcance</span></div>`;
+ const cls=pct<=0?'A meta está abaixo do que o seu condicionamento já projeta.':pct<2?'Meta ao alcance: um bloco bem executado costuma fechar essa diferença.':pct<5?'Meta desafiadora: pede um ciclo completo com mais volume.':'Meta de longo prazo: o ganho precisa vir em mais de um ciclo.';
+ const hero=`<div class="card hero"><div class="heroin">${big}<div style="min-width:0"><h3>${gd[0]} em ${fmtT(ts)} · ${fmtP(ts/(gd[1]/1000))}/km</h3>
+ <p>Seu nível atual (melhor prova dos últimos 6 meses: ${esc(cv.r.title)}, ${fmtD(cv.r.ms)}) equivale a <b>VDOT ${f1(Vc)}</b> e projeta <b>${fmtT(pred)}</b> nos ${gd[0].toLowerCase()}. A meta exige <b>VDOT ${f1(Vt)}</b> (${pct>=0?'+':''}${f1(pct)}%). ${cls}</p>
+ <p style="margin-top:8px">${months!=null?`Nos últimos 12 meses o seu VDOT subiu cerca de ${f1(rateU,2)} por mês. Nesse ritmo, a meta levaria uns <b>${Math.max(1,Math.round(months))} ${Math.round(months)<=1?'mês':'meses'}</b>. É estimativa otimista: o ganho tende a desacelerar perto do teto.`:Vt<=Vc?'':'Sem histórico suficiente para estimar o prazo.'}</p>
+ <p class="note">VDOT é a escala de Jack Daniels que converte um resultado de prova em nível de condicionamento. Serve para comparar distâncias e calcular ritmos de treino.</p></div></div></div>`;
+ const rows=[['Fácil / rodagem (E)','conversa confortável, constrói a base',paceAt(Vc,.74),paceAt(Vc,.59),paceAt(Vt,.74),paceAt(Vt,.59)],['Maratona (M)','finais de longão e treino específico',paceAt(Vc,.84),null,paceAt(Vt,.84),null],['Limiar (T)','blocos de 10 a 30 min, "forte e controlado"',paceAt(Vc,.88),null,paceAt(Vt,.88),null],['Intervalo (I)','repetições de 3 a 5 min (800 m a 1,2 km)',paceAt(Vc,.975),null,paceAt(Vt,.975),null]];
+ const pr=x=>x[3]!=null?`${fmtP(x[2])}–${fmtP(x[3])}`:fmtP(x[2]),pt=x=>x[5]!=null?`${fmtP(x[4])}–${fmtP(x[5])}`:fmtP(x[4]);
+ const trs=rows.map(x=>`<tr><td class="l">${x[0]}</td><td class="l t">${x[1]}</td><td>${pr(x)}</td><td>${pt(x)}</td></tr>`).join('')+`<tr><td class="l"><b>Ritmo de prova da meta</b></td><td class="l t">${gd[0]}</td><td>${fmtP(pred/(gd[1]/1000))}</td><td>${fmtP(ts/(gd[1]/1000))}</td></tr>`;
+ const paces=card('Ritmos de treino','Hoje = VDOT ${f1(Vc)} · Meta = VDOT ${f1(Vt)}. Seus treinos recentes já batem esses ritmos: tiros de 1 km em 3:42 a 3:50 e blocos de limiar em torno de 4:03.',`<div class="sc" style="max-height:none"><table><thead><tr><th class="l">Tipo</th><th class="l">Para quê</th><th>Hoje</th><th>Meta</th></tr></thead><tbody>${trs}</tbody></table></div>`,`<p class="note">Ritmos por km. Em dia de calor ou subida, guie-se pela FC e pelo esforço, não só pelo relógio.</p>`);
+ const pk=[['5 km',5000,[4.8,5.4]],['10 km',10000,[9.5,10.4]],['Meia',21097.5,[20.5,21.7]],['Maratona',42195,[41,43]]];
+ const prs=pk.map(([n,m,[lo,hi]])=>{const b=races.filter(r=>r.km>=lo&&r.km<=hi).sort((a,b)=>a.sec/a.km-b.sec/b.km)[0],p=timeAt(Vc,m);return`<tr><td class="l">${n}</td><td>${fmtT(p)}</td><td>${b?fmtT(b.sec)+' <small style="color:var(--mu)">'+fmtD(b.ms)+'</small>':'—'}</td><td>${b?delta(p,b.sec,{mode:'abs',dec:0,unit:' s',dir:-1,tol:5}):'—'}</td></tr>`}).join('');
+ const proj=card('O que o seu nível projeta','Projeção pelo VDOT atual contra o seu melhor oficial.',`<div class="sc" style="max-height:none"><table><thead><tr><th class="l">Distância</th><th>Projeção</th><th>Melhor prova</th><th>Diferença</th></tr></thead><tbody>${prs}</tbody></table></div>`,`<p class="note">Meia e maratona exigem longões e volume que o VDOT não mede. Leia a projeção como teto se o preparo for bom.</p>`);
+ const xs=races.map(r=>r.ms),vs=races.map(raceV);
+ const vch=card('VDOT de cada prova','Cada ponto é uma prova (5 a 25 km). Linha tracejada = meta.',lineChart({xs,series:[{c:C[0],vals:vs,area:true}],yfmt:v=>f1(v,0),refs:[{v:Vt,t:'meta '+f1(Vt),c:C[1]},{v:Vc,t:'hoje '+f1(Vc),c:NEU}],tip:i=>`<b>${esc(races[i].title)}</b><br>${fmtD(xs[i])} · ${f1(races[i].km,1)} km em ${fmtT(races[i].sec)}<br>VDOT ${f1(vs[i])}`}),`<p class="note">Provas mal executadas aparecem como queda de VDOT sem queda de forma. Veja a página Execução de prova.</p>`);
+ /* o que mudar */
+ const W=weeklyAll(),w52=W.slice(-53,-1);let ref=0;for(let i=0;i+8<=w52.length;i++)ref=Math.max(ref,mean(w52.slice(i,i+8).map(w=>w.km)));const last4=mean(mondayKm(4));
+ const longs=ACTS.filter(a=>a.ms>=N-55*DAY&&a.km>=16&&a.cat!=='Prova'&&a.ty!=='T'),longMax=Math.max(0,...longs.map(a=>a.km)),need={'5k':14,'10k':18,'21k':24,'42k':32}[g.d];
+ const zs=[0,0,0,0,0];win(N-27*DAY,N).forEach(a=>zoneSec(a).forEach((s,k)=>zs[k]+=s));const zt=sum(zs),easy=zt?(zs[0]+zs[1])/zt*100:null;
+ const qI=win(N-55*DAY,N).filter(a=>a.cat==='Intervalado').length,qT=win(N-55*DAY,N).filter(a=>a.cat==='Limiar/Ritmo').length;
+ const L=loadSeries(),pre=races.slice(-6).map(r=>preRace(r,L,races)),fades=pre.map(p=>p.split?p.split.fade:null).filter(v=>v!=null),tapers=pre.map(p=>p.taper).filter(v=>v!=null);
+ const fadeM=fades.length?median(fades):null,tapM=tapers.length?median(tapers)*100:null;
+ const ev=[],add=(sev,tag,title,text)=>ev.push({sev,tag,title,text}),ic={ok:'✓',warn:'▲',bad:'✕',info:'●'};
+ add(last4>=ref*.85?'ok':last4>=ref*.65?'warn':'bad',f1(last4,0)+' km/sem','Volume semanal',`Média das últimas 4 semanas completas: ${f1(last4)} km. Seu melhor período de 8 semanas no último ano teve ${f1(ref)} km por semana. ${last4>=ref*.85?'Volume próximo do seu melhor bloco.':'Volume abaixo do bloco que sustentou o seu recorde: é a alavanca mais barata para subir o VDOT.'}`);
+ add(longMax>=need?'ok':longMax>=need-3?'warn':'bad',f1(longMax,0)+' km','Longão',`Maior treino longo nas últimas 8 semanas: ${f1(longMax)} km, com ${longs.length} longão(ões) de 16 km ou mais. Para ${gd[0].toLowerCase()} vale chegar a uns ${need} km. ${longs.length<3?'Poucos longões recentes.':''}`);
+ if(easy!=null)add(easy>=65?'ok':easy>=50?'warn':'bad',f1(easy,0)+'% fácil','Distribuição de intensidade',`Nas últimas 4 semanas, ${f1(easy,0)}% do tempo ficou em Z1+Z2 (zonas por FC de reserva, FCmáx ${S.hrmax}). A referência para esse tipo de preparo é 75–80%. Dias fáceis a ${fmtP(paceAt(Vc,.74))}–${fmtP(paceAt(Vc,.59))} /km mantêm a FC em zona baixa.`);
+ add(qI>=4&&qT>=2?'ok':'info',`${qI} I · ${qT} T`,'Qualidade nas 8 semanas',`${qI} sessões de intervalo (ritmo I) e ${qT} de limiar (ritmo T). O equilíbrio comum é uma de cada por semana; ${qT<qI/2?'o limiar está sub-representado frente aos tiros.':'proporção equilibrada.'}`);
+ if(fadeM!=null)add(fadeM<=2?'ok':fadeM<=5?'warn':'bad',(fadeM>=0?'+':'')+f1(fadeM)+'%','Execução de prova',`Mediana da desaceleração entre a 1ª e a 2ª metade nas últimas ${fades.length} provas. Meta: até +2%. Ritmo uniforme costuma valer mais do que treinar mais forte.`);
+ if(tapM!=null)add(tapM>=55&&tapM<=80?'ok':'warn',f1(tapM,0)+'% da base','Semana de prova',`Mediana do volume da semana da prova nas últimas ${tapers.length} provas, contra o volume normal. Suas melhores provas vieram com 60–75%.`);
+ add(pct<=0?'ok':pct<2?'ok':pct<5?'warn':'bad',(pct>=0?'+':'')+f1(pct)+'%','Tamanho da meta',cls);
+ const evh=`<div class="ev">${ev.map(e=>`<div class="card ${e.sev}"><h4><span>${ic[e.sev]}</span>${e.title}<span class="badge">${e.tag}</span></h4><p>${e.text}</p></div>`).join('')}</div>`;
+ return ctl+hero+sech('O que mudar para chegar lá')+evh+sech('Números de referência')+`<div class="grid g2">${paces}${proj}</div><div class="mt">${vch}</div>`}
+
+/* ---------- plano ---------- */
+const Q1M=[['6×1 km @I · rec 2 min',6],['5×1 km @I · rec 2 min',5],['8×800 m @I · rec 90 s',6.4],['6×1 km @I · rec 2 min',6],['10×400 m @I · rec 60 s',4],['4×1,2 km @I · rec 2:30',4.8],['6×1 km @I · rec 2 min',6],['5×1 km @I · rec 2 min',5]];
+const Q2M=[['2×3 km @T · rec 2 min',6],['3×2 km @T · rec 90 s',6],['5 km contínuo @T',5],['4×2 km @T · rec 90 s',8],['6 km contínuo @T',6],['3×3 km @T · rec 2 min',9],['7 km contínuo @T',7],['2×4 km @T · rec 2 min',8]];
+const DIAS={4:[['Ter','Q1'],['Qui','Q2'],['Sáb','E'],['Dom','L']],5:[['Seg','E'],['Ter','Q1'],['Qui','Q2'],['Sáb','E'],['Dom','L']],6:[['Seg','E'],['Ter','Q1'],['Qua','E'],['Qui','Q2'],['Sáb','E'],['Dom','L']]};
+function planBuild(){const N=NOW(),W=weeklyAll(),g=S.goal,Vo=curVdot(),Vc=Vo?Vo.v:50,dpw=+S.dpw||5,base=mean(mondayKm(4))||30,start=weekStart(N)+7*DAY;
+ let ref=0;const w52=W.slice(-53,-1);for(let i=0;i+8<=w52.length;i++)ref=Math.max(ref,mean(w52.slice(i,i+8).map(w=>w.km)));
+ let nW=8,raceMs=null;if(g.date){const m=toMs(g.date);if(isFinite(m)&&m>=start){nW=Math.min(16,Math.max(2,Math.ceil((m-start+DAY)/(7*DAY))));raceMs=m}}
+ const cap=Math.max(base*1.2,Math.min(ref*1.05,75)),lcap={'5k':18,'10k':22,'21k':26,'42k':32}[g.d]||22;
+ const recent=Math.max(0,...win(N-55*DAY,N).filter(a=>a.km>=14&&a.cat!=='Prova'&&a.ty!=='T').map(a=>a.km));
+ let build=base,lr=Math.max(14,Math.min(recent||16,lcap)),bi=0;const E=[paceAt(Vc,.74),paceAt(Vc,.59)],pT=paceAt(Vc,.88),pI=paceAt(Vc,.975),pM=paceAt(Vc,.84),eR=`${fmtP(E[0])}–${fmtP(E[1])}`;const weeks=[];
+ for(let k=0;k<nW;k++){const toRace=raceMs?nW-1-k:99,ws=start+k*7*DAY;let kind='build',km;
+  if(raceMs&&toRace===0){kind='prova'}else if(raceMs&&toRace===1){kind='polimento';km=build*.82}else if(k%4===3){kind='leve';km=build*.8}else{build=Math.min(cap,build*1.07);km=build;if(k>0&&bi%2===1)lr=Math.min(lcap,lr+2);bi++}
+  const rows=[];
+  if(kind==='prova'){const R=raceMs,d=n=>R-n*DAY,lab=ms=>{const x=new Date(ms);return['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][x.getUTCDay()]+' '+fmtDM(ms)};
+   rows.push([lab(d(6)),'Qualidade curta: 2 km fácil + 4×1 km @I (rec 2 min) + 2 km',9,fmtP(pI)]);rows.push([lab(d(5)),'Fácil, relaxado',6,eR]);rows.push([lab(d(4)),'Folga',0,'—']);rows.push([lab(d(3)),'Fácil + 4 retas de 20 s',5,eR]);rows.push([lab(d(2)),'Folga ou 3 km muito leves',0,'—']);rows.push([lab(d(1)),'3 km leves + 3 retas de 20 s',3,eR]);
+   rows.push([lab(R),'PROVA: '+(GD[g.d]||GD['10k'])[0]+' em '+g.t,(GD[g.d]||GD['10k'])[1]/1000,fmtP(parseT(g.t)?parseT(g.t)/((GD[g.d]||GD['10k'])[1]/1000):pI)]);
+  }else{
+   const lrk=Math.round(Math.min(kind==='leve'?lr*.75:kind==='polimento'?lr*.7:lr,.42*km)),Q1=Q1M[Math.max(0,bi-1)%Q1M.length],Q2=Q2M[Math.max(0,bi-1)%Q2M.length];
+   let qk1=Math.round(Q1[1]+3),qk2=Math.round(Q2[1]+3);let t1=Q1[0],t2=Q2[0];
+   if(kind==='leve'){t1='4×1 km @I · rec 2 min';qk1=9;t2=null}
+   if(kind==='polimento'){t1='4×1 km @I · rec 2 min';qk1=9;t2='3 km @T + 4 retas';qk2=7}
+   const nE=DIAS[dpw].filter(x=>x[1]==='E').length+(t2?0:1),rest=km-lrk-qk1-(t2?qk2:0),ek=Math.max(3,Math.round(rest/Math.max(1,nE)));
+   const longTxt=(kind==='build'&&(bi===3||bi===7))?`Longão; últimos 4 km @M (${fmtP(pM)})`:'Longão contínuo, ritmo de conversa';
+   DIAS[dpw].forEach(([dn,role])=>{if(role==='Q1')rows.push([dn,t1,qk1,fmtP(pI)]);else if(role==='Q2')rows.push(t2?[dn,t2,qk2,fmtP(pT)]:[dn,'Fácil',ek,eR]);else if(role==='L')rows.push([dn,longTxt,lrk,eR]);else rows.push([dn,'Fácil',ek,eR])})}
+  weeks.push({k,kind,ws,rows,km:sum(rows.map(r=>r[2]))})}
+ return{weeks,base,ref,cap,start,raceMs,Vc,lcap,dpw}}
+function pgPlano(){const P=planBuild(),g=S.goal,gd=GD[g.d]||GD['10k'],N=NOW();
+ const ctl=`${goalCtl()}<div class="ctl" style="margin:-4px 0 14px"><span>Dias de treino por semana:</span><select data-sx="dpw">${[4,5,6].map(n=>`<option value="${n}"${+S.dpw===n?' selected':''}>${n}</option>`).join('')}</select></div>`;
+ const W=weeklyAll().slice(-9,-1),past=W.map(w=>w.km),fut=P.weeks.map(w=>w.km);
+ const cats=[...W.map(w=>w.w),...P.weeks.map(w=>w.ws)],stacks=[...past.map(v=>[v,0]),...fut.map(v=>[0,v])];
+ const ch=stackChart({cats,stacks,colors:[NEU,C[0]],labels:cats.map(fmtDM),yfmt:v=>f1(v,0),tip:i=>`<b>Semana de ${fmtD(cats[i])}</b><br>${i<past.length?'Realizado':'Plano'}: ${f1(stacks[i][i<past.length?0:1],0)} km`});
+ const kindT={build:'Construção',leve:'Semana leve',polimento:'Polimento',prova:'Semana da prova'},kc={build:'info',leve:'ok',polimento:'ok',prova:'warn'};
+ const sum1=`<div class="grid kpis">${kpiCard('Base atual',f1(P.base,0)+' <small>km/sem</small>','média das últimas 4 semanas')}${kpiCard('Melhor bloco (8 sem)',f1(P.ref,0)+' <small>km/sem</small>','no último ano')}${kpiCard('Teto do plano',f1(P.cap,0)+' <small>km/sem</small>','aumento de até 7% ao ano... por semana'.replace('ao ano... ',''))}${kpiCard('Duração',P.weeks.length+' <small>semanas</small>',P.raceMs?'até a prova em '+fmtD(P.raceMs):'sem data de prova')}</div>`;
+ const wk=P.weeks.map(w=>`<div class="card ${kc[w.kind]} mt"><h4>Semana ${w.k+1} · ${fmtDM(w.ws)} a ${fmtDM(w.ws+6*DAY)} <span class="badge">${kindT[w.kind]}</span> <span class="badge">${f1(w.km,0)} km</span></h4><div class="sc" style="max-height:none;margin-top:8px"><table style="table-layout:fixed"><colgroup><col style="width:16%"><col><col style="width:12%"><col style="width:22%"></colgroup><thead><tr><th class="l">Dia</th><th class="l">Treino</th><th>km</th><th>Ritmo-alvo</th></tr></thead><tbody>${w.rows.map(r=>`<tr><td class="l">${r[0]}</td><td class="l t">${r[1]}</td><td>${r[2]?f1(r[2],r[2]%1?1:0):'—'}</td><td>${r[3]}</td></tr>`).join('')}</tbody></table></div></div>`).join('');
+ const rules=`<ul class="q"><li><b>Rampa:</b> até 7% de aumento por semana e uma semana leve (80%) a cada 4. O teto vem do seu melhor bloco recente.</li><li><b>Dois dias fortes por semana, nunca seguidos.</b> O resto é fácil de verdade, no ritmo E ou abaixo.</li><li><b>Longão:</b> cresce 2 km a cada 2 semanas até ${P.lcap} km (teto para ${gd[0].toLowerCase()}), com final em ritmo de maratona em algumas semanas.</li><li><b>Semana de prova:</b> 60–70% do volume, última sessão de qualidade 5 a 6 dias antes. Foi o padrão das suas melhores provas.</li><li><b>Ajuste pelo corpo:</b> se a VFC de 7 dias ficar mais de 8% abaixo da sua média, o sono cair para menos de 6 h ou doer algo, troque o dia forte por um fácil. Dor persistente: pare e procure um profissional.</li></ul><p class="note">Plano de referência gerado a partir do seu histórico e do VDOT ${f1(P.Vc)}. Não substitui treinador nem avaliação médica.</p>`;
+ return ctl+sum1+`<div class="grid g2 mt">${card('Volume: últimas 8 semanas × plano','Cinza = realizado · azul = plano',ch,legend([['Realizado',NEU],['Plano',C[0]]]))}${card('Como o plano foi montado','',rules)}</div>`+sech('Semana a semana')+wk}
+
+/* ---------- execução de prova ---------- */
+function execStats(r){const L=r.laps.filter(l=>l.km>=.9);if(L.length<3)return null;const p=L.map(l=>l.sec/l.km),avg=mean(p),sd=Math.sqrt(mean(p.map(x=>(x-avg)**2))),s=splitOf(r);
+ return{p,h:L.map(l=>l.hr),avg,k1:p[0]-avg,worst:Math.max(...p),wi:p.indexOf(Math.max(...p))+1,fin:mean(p.slice(-2))-avg,cv:sd/avg*100,fade:s?s.fade:null,lost:s?(s.p2-s.p1)*r.km/2:null}}
+const sgn=v=>(v>=0?'+':'−')+Math.abs(Math.round(v))+' s';
+function pgExec(){const races=ACTS.filter(isRaceAct).sort((a,b)=>b.ms-a.ms).map(r=>({r,x:execStats(r)})).filter(o=>o.x);
+ if(!races.length)return'<p class="note">Sem provas com parciais por km.</p>';
+ const key=o=>o.r.ms+'|'+o.r.title;let cur=races.find(o=>key(o)===S.xrace)||races[0];S.xrace=key(cur);
+ const sel=`<div class="ctl" style="margin-bottom:14px"><span>Prova:</span><select data-sx="xrace" style="max-width:100%">${races.map(o=>`<option value="${esc(key(o))}"${o===cur?' selected':''}>${fmtD(o.r.ms)} · ${esc(o.r.title)} · ${f1(o.r.km,1)} km · ${fmtT(o.r.sec)}</option>`).join('')}</select></div>`;
+ const r=cur.r,x=cur.x,n=x.p.length,xs=x.p.map((_,i)=>i+1),g=S.goal,gd=GD[g.d]||GD['10k'],ts=parseT(g.t),gp=ts?ts/(gd[1]/1000):null,sameD=Math.abs(r.km-gd[1]/1000)<.6*Math.max(1,gd[1]/10000);
+ const kp=`<div class="grid kpis">${kpiCard('Ritmo médio',fmtP(x.avg)+' <small>/km</small>',f1(r.km,2)+' km em '+fmtT(r.sec))}${kpiCard('Saída (1º km)',sgn(x.k1),'contra a média da prova')}${kpiCard('Final (2 últimos km)',sgn(x.fin),x.fin<=0?'acelerou no fim':'perdeu ritmo no fim')}${kpiCard('Pior km','km '+x.wi+' · '+fmtP(x.worst),sgn(x.worst-x.avg)+' vs média')}${kpiCard('2ª metade',x.fade==null?'—':(x.fade>=0?'+':'')+f1(x.fade)+'%',x.lost==null?'':(x.lost>0?'perdeu ':'ganhou ')+Math.abs(Math.round(x.lost))+' s vs a 1ª metade')}${kpiCard('Variação entre km',f1(x.cv)+'<small>%</small>','menor = mais uniforme')}</div>`;
+ const refs=[{v:-x.avg,t:'média',c:NEU}];if(gp&&sameD)refs.push({v:-gp,t:'meta',c:C[1]});
+ const pc=lineChart({xs,series:[{c:C[0],vals:x.p.map(v=>-v),area:true}],yfmt:v=>fmtP(-v),xfmt:v=>'km '+Math.round(v),xk:Math.min(n-1,9),refs,tip:i=>`<b>Km ${i+1}</b><br>${fmtP(x.p[i])}/km<br>FC ${x.h[i]??'—'}<br>${sgn(x.p[i]-x.avg)} vs média`,w:CW(),h:230});
+ const hc=lineChart({xs,series:[{c:C[1],vals:x.h}],yfmt:v=>f1(v,0),xfmt:v=>'km '+Math.round(v),xk:Math.min(n-1,9),tip:i=>`<b>Km ${i+1}</b><br>FC ${x.h[i]??'—'} · ${fmtP(x.p[i])}/km`,h:230});
+ /* sobreposição das provas de 10 km */
+ const tk=races.filter(o=>o.r.km>=9.4&&o.r.km<=10.6&&o.x.p.length>=9).slice(0,6).reverse(),mx=Math.max(...tk.map(o=>o.x.p.length),1),ov=tk.length>=2?lineChart({xs:Array.from({length:mx},(_,i)=>i+1),series:tk.map((o,i)=>({n:fmtD(o.r.ms),c:C[i],sw:o===cur?3:1.8,nodots:true,vals:Array.from({length:mx},(_,j)=>o.x.p[j]!=null?-(o.x.p[j]-o.x.avg):null)})),yfmt:v=>(v>0?'+':v<0?'−':'')+Math.abs(Math.round(v))+'s',xfmt:v=>'km '+Math.round(v),xk:mx-1,refs:[{v:0,t:'média da prova'}],h:240,tip:j=>`<b>Km ${j+1}</b><br>`+tk.map(o=>o.x.p[j]!=null?`${fmtD(o.r.ms)}: ${fmtP(o.x.p[j])} (${sgn(o.x.p[j]-o.x.avg)})`:'').filter(Boolean).join('<br>')}):noData;
+ const ovc=card('Perfil de ritmo das últimas provas de 10 km','Cada linha é uma prova, relativa à própria média. Acima de zero = mais rápido que a média da prova; a linha grossa é a selecionada.',ov,tk.length>=2?legend(tk.map((o,i)=>[fmtD(o.r.ms)+' · '+fmtT(o.r.sec),C[i]])):'');
+ /* plano de largada */
+ let pl='<p class="note">Defina uma meta na página Meta para ver o plano de largada.</p>';
+ if(gp){const d=gd[1]/1000,T=ts,sg=g.d==='5k'?[[1,1,+3,'km 1'],[2,4,0,'km 2 a 4'],[5,5,-3,'km 5']]:g.d==='10k'?[[1,1,+3,'km 1'],[2,8,0,'km 2 a 8'],[9,10,-3,'km 9 e 10']]:g.d==='21k'?[[1,3,+4,'km 1 a 3'],[4,18,0,'km 4 a 18'],[19,21.0975,-3,'km 19 ao fim']]:[[1,5,+5,'km 1 a 5'],[6,35,0,'km 6 a 35'],[36,42.195,-4,'km 36 ao fim']];
+  const len=s=>s[1]===s[0]?1:(s[1]-s[0]+1>d?d-s[0]+1:Math.min(s[1],d)-s[0]+1);const fixed=sg[0],last=sg[2];const lf=len(fixed),ll=len(last),lm=d-lf-ll;const pF=gp+fixed[2],pL=gp+last[2],pM=(T-pF*lf-pL*ll)/lm;
+  const pp=[pF,pM,pL];pl=`<div class="sc" style="max-height:none"><table><thead><tr><th class="l">Trecho</th><th>Ritmo</th><th class="l">Como correr</th></tr></thead><tbody>${sg.map((s,i)=>`<tr><td class="l">${s[3]}</td><td>${fmtP(pp[i])}</td><td class="l t">${i===0?'Segure: o início parece fácil e cobra no fim.':i===1?'Ritmo constante, esforço controlado.':'Se sobrou, acelere agora.'}</td></tr>`).join('')}</tbody></table></div><p class="note">Plano para ${gd[0]} em ${fmtT(T)} (${fmtP(gp)}/km): largada um pouco abaixo da meta, trecho central uniforme e final forte. Os trechos fecham exatamente o tempo-alvo.</p>`}
+ const trs=races.map(o=>{const q=o.x;return`<tr${o===cur?' style="background:rgba(76,141,255,.08)"':''}><td class="l">${fmtD(o.r.ms)}</td><td class="l t">${esc(o.r.title)}</td><td>${f1(o.r.km,1)}</td><td>${fmtT(o.r.sec)}</td><td>${sgn(q.k1)}</td><td>${sgn(q.fin)}</td><td>${fmtP(q.worst)}</td><td>${f1(q.cv)}%</td><td>${q.fade==null?'—':`<span class="dl ${q.fade>4?'bad':q.fade<-1?'good':''}">${(q.fade>=0?'+':'')+f1(q.fade)}%</span>`}</td></tr>`}).join('');
+ const all=`<div class="card mt"><h4>Todas as provas</h4><p class="sub">Saída e final são relativos à média da própria prova. 2ª metade: vermelho acima de +4%, verde abaixo de −1%.</p><div class="sc"><table><thead><tr><th class="l">Data</th><th class="l">Prova</th><th>km</th><th>Tempo</th><th>Saída</th><th>Final</th><th>Pior km</th><th>Variação</th><th>2ª metade</th></tr></thead><tbody>${trs}</tbody></table></div></div>`;
+ return sel+goalCtl()+kp+`<div class="grid g2 mt">${card('Ritmo km a km','Mais alto = mais rápido'+(gp&&sameD?' · linha laranja = ritmo da meta':''),pc)}${card('FC km a km','',hc)}${ovc}${card('Plano de largada para a sua meta','',pl)}</div>`+all}
+
 /* ============ navegação e render ============ */
 const PAGES=[
  ['resumo','Resumo','Como você está hoje',pgResumo,0,'<path d="M4 13a8 8 0 1 1 16 0"/><path d="M12 13l4-5"/><path d="M5 19h14"/>'],
  ['comparativos','Comparativos','Um período contra o outro',pgComparativos,0,'<path d="M7 4v16M7 4L3 8M7 4l4 4"/><path d="M17 20V4m0 16l4-4m-4 4l-4-4"/>'],
+ ['meta','Meta e projeção','Quanto falta e o que mudar',pgMeta,0,'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>'],
+ ['plano','Plano de treino','Próximas semanas',pgPlano,0,'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>'],
  ['volume','Volume','Quanto você corre',pgVolume,1,'<path d="M5 20V11M12 20V4M19 20v-6"/>'],
  ['carga','Carga','Forma, fadiga e equilíbrio',pgCarga,1,'<path d="M3 12h4l3-8 4 16 3-8h4"/>'],
  ['intensidade','Intensidade','Onde você passa o tempo',pgIntens,1,'<path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3 0-6 1-9z"/>'],
  ['eficiencia','Eficiência','Ritmo × FC nas rodagens fáceis',pgEficiencia,1,'<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>'],
  ['provas','Provas','Resultados, recordes e projeções',pgProvas,0,'<path d="M6 21V4"/><path d="M6 4h11l-2 4 2 4H6"/>'],
  ['prerace','Antes das provas','O que explica cada resultado',pgPre,0,'<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/>'],
+ ['exec','Execução de prova','Ritmo km a km',pgExec,0,'<path d="M3 17l5-6 4 3 5-8 4 5"/>'],
  ['intervalados','Intervalados','Qualidade das repetições',pgInterv,1,'<path d="M4 9h13l-3-3M20 15H7l3 3"/>'],
  ['recuperacao','Recuperação','Sono, VFC e prontidão',pgRec,0,'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>'],
  ['treinos','Treinos','Todas as atividades',pgTreinos,1,'<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>'],
@@ -726,6 +847,7 @@ function render(){
  $('#stamp').innerHTML=`${ACTS.length} atividades · até ${fmtD(ACTS[0].ms)}<br>${esc(SRC)}`;
  $('#app').innerHTML=pg[3]();
  if(S.page==='treinos'){$('#fcat').value=S.cat;$('#fq').value=S.q;$('#fcat').onchange=e=>{S.cat=e.target.value;renderTable()};$('#fq').oninput=e=>{S.q=e.target.value;renderTable()};renderTable()}
+ bindCtl();
  if(S.page==='prerace'){const sel=$('#prace');if(sel)sel.onchange=ev=>{S.race=ev.target.value;const y=scrollY;render();scrollTo(0,y)}}
  if(S.page==='comparativos')$('#cmpseg').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.cmp=b.dataset.c;const y=scrollY;render();scrollTo(0,y)})}
 function go(p){S.page=p;if(location.hash!=='#'+p)history.pushState(null,'','#'+p);document.body.classList.remove('open');render();scrollTo(0,0)}
@@ -748,7 +870,7 @@ $('#hmax').onchange=e=>{S.hrmax=clamp(+e.target.value||190,150,220);e.target.val
 $('#hrest').onchange=e=>{S.hrrest=clamp(+e.target.value||45,30,80);e.target.value=S.hrrest;render()};
 
 let _cw=CW(),_rt;addEventListener('resize',()=>{clearTimeout(_rt);_rt=setTimeout(()=>{if(CW()!==_cw){_cw=CW();render()}},200)});
-loadRaw(RAW);fromHash();render();
+goalInit();loadRaw(RAW);fromHash();render();
 </script>
 </body>
 </html>
