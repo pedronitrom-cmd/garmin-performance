@@ -204,7 +204,6 @@ wellness_commands = {
     "weight_measurements": "weight-measurements",
     "wellness_activity_summaries": "wellness-activity-summaries",
     "body_battery": "body-battery",
-    "stress": "stress",
     "steps": "steps",
 }
 
