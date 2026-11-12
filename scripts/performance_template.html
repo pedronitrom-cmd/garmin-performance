@@ -216,7 +216,7 @@ function classify(a){const t=norm(a.title);
  return'Rodagem'}
 function prep(rows){return rows.map(r=>{const f=r[8]||[],laps=[];for(let i=0;i+2<f.length;i+=3)laps.push({km:f[i],sec:f[i+1],hr:f[i+2]});
  const a={d:r[0],t:r[1],ty:r[2],title:r[3],km:r[4],sec:r[5],hr:r[6],hrmax:r[7],laps,ms:toMs(r[0])};a.pace=a.sec/a.km;a.cat=classify(a);return a}).sort((x,y)=>y.ms-x.ms||(y.t>x.t?1:-1))}
-function loadRaw(raw){ACTS=prep(raw.a);REC={m:raw.m||[],r:(raw.r||[]).map(r=>({ms:toMs(r[0]),d:r[0],sl:r[1],vfc:r[2],bb:r[3]})).sort((a,b)=>a.ms-b.ms),k:raw.k||{}};if(raw.src)SRC=raw.src}
+function loadRaw(raw){ACTS=prep(raw.a);const XX=raw.x||{};ACTS.forEach(a=>{const e=XX[a.d+' '+a.t];if(e)a.x=e});WX=raw.we||{d:[],w:[]};REC={m:raw.m||[],r:(raw.r||[]).map(r=>({ms:toMs(r[0]),d:r[0],sl:r[1],vfc:r[2],bb:r[3]})).sort((a,b)=>a.ms-b.ms),k:raw.k||{}};if(raw.src)SRC=raw.src}
 const NOW=()=>Math.max(toMs(new Date().toISOString().slice(0,10)),ACTS.length?ACTS[0].ms:0);
 const sinceMs=()=>({all:0,'12m':NOW()-364*DAY,'6m':NOW()-182*DAY,'90d':NOW()-89*DAY,'30d':NOW()-29*DAY})[S.range];
 
@@ -818,12 +818,96 @@ function pgExec(){const races=ACTS.filter(isRaceAct).sort((a,b)=>b.ms-a.ms).map(
  const all=`<div class="card mt"><h4>Todas as provas</h4><p class="sub">Saída e final são relativos à média da própria prova. 2ª metade: vermelho acima de +4%, verde abaixo de −1%.</p><div class="sc"><table><thead><tr><th class="l">Data</th><th class="l">Prova</th><th>km</th><th>Tempo</th><th>Saída</th><th>Final</th><th>Pior km</th><th>Variação</th><th>2ª metade</th></tr></thead><tbody>${trs}</tbody></table></div></div>`;
  return sel+goalCtl()+kp+`<div class="grid g2 mt">${card('Ritmo km a km','Mais alto = mais rápido'+(gp&&sameD?' · linha laranja = ritmo da meta':''),pc)}${card('FC km a km','',hc)}${ovc}${card('Plano de largada para a sua meta','',pl)}</div>`+all}
 
+/* ---------- biomecânica, clima, terreno e carga; corpo e rotina ---------- */
+let WX={d:[],w:[]};
+const xr=()=>ACTS.filter(a=>a.x&&a.ty==='R'&&a.km>=3);
+const xm=(L,k)=>{const v=L.map(a=>a.x[k]).filter(v=>v!=null);return v.length?median(v):null};
+const cnt=(L,k)=>L.filter(a=>a.x[k]!=null).length;
+function slope(xs,ys){const n=xs.length;if(n<8)return null;const mx=mean(xs),my=mean(ys);let a=0,b=0;for(let i=0;i<n;i++){a+=(xs[i]-mx)*(ys[i]-my);b+=(xs[i]-mx)**2}return b?a/b:null}
+const noX=(t)=>`<p class="note">${t} O relógio ou o sync ainda não trouxe esse dado nas suas corridas. Ele aparece aqui sozinho quando chegar.</p>`;
+const ptsOf=(L,fx,fy)=>L.filter(a=>fx(a)!=null&&fy(a)!=null).map(a=>({x:fx(a),y:fy(a),c:CATC[a.cat]||NEU,tip:`<b>${esc(a.title)}</b><br>${fmtD(a.ms)} · ${f1(a.km,1)} km · ${fmtP(a.pace)}/km`}));
+
+function pgBio(){const L=xr(),N=NOW();
+ if(!L.length)return noX('Nenhuma corrida com métricas extras.');
+ const M=[['cad','Cadência','spm',0,0],['stride','Passada','cm',0,0],['gct','Contato com o solo','ms',0,-1],['vo','Oscilação vertical','cm',1,-1],['pw','Potência','W',0,0],['up','Subida por corrida','m',0,0],['tp','Temperatura','°C',0,0]];
+ const cov=`<div class="sc" style="max-height:none"><table><thead><tr><th class="l">Métrica</th><th>Corridas com dado</th><th>Cobertura</th><th>Mediana</th></tr></thead><tbody>${M.concat([['gap','Ritmo ajustado (GAP)','s/km',0,0],['ld','Carga Garmin','',0,0],['te','Efeito aeróbico','',1,0]]).map(([k,n,u,d])=>{const c=cnt(L,k),m=xm(L,k);return`<tr><td class="l">${n}</td><td>${c} de ${L.length}</td><td>${Math.round(c/L.length*100)}%</td><td>${m==null?'—':(k==='gap'?fmtP(m):f1(m,d))+(u&&k!=='gap'?' '+u:'')}</td></tr>`}).join('')}</tbody></table></div>`;
+ const a28=L.filter(a=>a.ms>=N-27*DAY),b28=L.filter(a=>a.ms<N-27*DAY&&a.ms>=N-55*DAY);
+ const kp=M.filter(([k])=>cnt(a28,k)>=2).map(([k,n,u,d,dir])=>{const v=xm(a28,k),pv=xm(b28,k);return kpiCard(n,f1(v,d)+' <small>'+u+'</small>',pv==null?'últimas 4 semanas':'4 sem. anteriores: '+f1(pv,d),pv==null?'':delta(v,pv,{dir,mode:'abs',dec:d,unit:' '+u,tol:d?.15:1}))}).join('');
+ const sec1=sech('Resumo das últimas 4 semanas')+(kp?`<div class="grid kpis">${kp}</div>`:noX('Sem métricas biomecânicas nas últimas 4 semanas.'))+`<div class="mt">${card('Cobertura dos dados','Quantas corridas trazem cada métrica. Use para saber o quanto confiar em cada gráfico.',cov)}</div>`;
+ /* cadência e passada x ritmo */
+ const C1=L.filter(a=>a.x.cad!=null&&a.pace<400),S1=L.filter(a=>a.x.stride!=null&&a.pace<400);
+ const sC=slope(C1.map(a=>-a.pace),C1.map(a=>a.x.cad)),sS=slope(S1.map(a=>-a.pace),S1.map(a=>a.x.stride));
+ const ins=sC!=null&&sS!=null?`<p class="note">A cada 10 s/km mais rápido, a sua cadência muda cerca de ${sC*10>=0?'+':''}${f1(sC*10,1)} spm e a passada ${sS*10>=0?'+':''}${f1(sS*10,1)} cm. ${Math.abs(sC*10)<1.2&&sS*10>=1?'Você ganha velocidade quase só alongando a passada.':Math.abs(sS*10)<1&&sC*10>=1?'Você ganha velocidade quase só aumentando a cadência.':'O ganho vem dos dois lados.'}</p>`:'';
+ const sc1=C1.length>=5?scatter({pts:ptsOf(C1,a=>a.pace,a=>a.x.cad),yfmt:v=>Math.round(v),xfmt:fmtP}):noX('Cadência.');
+ const sc2=S1.length>=5?scatter({pts:ptsOf(S1,a=>a.pace,a=>a.x.stride),yfmt:v=>Math.round(v),xfmt:fmtP}):noX('Passada.');
+ const sec2=sech('Como você acelera')+`<div class="grid g2">${card('Cadência × ritmo','Cada ponto é uma corrida. Eixo horizontal: ritmo (min/km); vertical: passos por minuto.',sc1,ins)}${card('Passada × ritmo','Comprimento médio da passada em cm.',sc2)}</div>`;
+ /* evolução mensal */
+ const mo=new Map();L.forEach(a=>{const k=a.d.slice(0,7);(mo.get(k)||mo.set(k,[]).get(k)).push(a)});const ks=[...mo.keys()].sort().slice(-14);
+ const evo=(k,c,u,d)=>{const v=ks.map(m=>cnt(mo.get(m),k)>=2?xm(mo.get(m),k):null);return v.filter(x=>x!=null).length>=3?lineChart({xs:ks.map(m=>toMs(m+'-15')),series:[{c,vals:v,area:true}],yfmt:x=>f1(x,d),xfmt:fmtM,xk:Math.min(5,ks.length-1),tip:i=>`<b>${fmtM(toMs(ks[i]+'-15'))}</b><br>${v[i]==null?'—':f1(v[i],d)+' '+u} · ${mo.get(ks[i]).length} corridas`,h:190}):noX('Este dado.')};
+ const sec3=sech('Evolução mês a mês (mediana)')+`<div class="grid g2">${card('Cadência','spm',evo('cad',C[0],'spm',0))}${card('Contato com o solo','ms · menor costuma ser mais eficiente',evo('gct',C[1],'ms',0))}${card('Oscilação vertical','cm · menor desperdiça menos energia',evo('vo',C[2],'cm',1))}${card('Passada','cm',evo('stride',C[3],'cm',0))}</div><p class="note">Compare só meses com ritmos parecidos: cadência e passada mudam com a velocidade.</p>`;
+ /* fadiga */
+ const F=L.filter(a=>a.km>=8&&a.x.c1!=null&&a.x.c3!=null).slice(0,12);
+ const fr=F.map(a=>{const s=splitOf(a);return`<tr><td class="l">${fmtD(a.ms)}</td><td class="l t">${esc(a.title)}</td><td>${f1(a.km,1)}</td><td>${a.x.c1} → ${a.x.c3}</td><td>${sgn1(a.x.c3-a.x.c1)}</td><td>${a.x.g1!=null&&a.x.g3!=null?a.x.g1+' → '+a.x.g3+' ms':'—'}</td><td>${s?(s.fade>=0?'+':'')+f1(s.fade)+'%':'—'}</td></tr>`}).join('');
+ const dc=F.map(a=>a.x.c3-a.x.c1),dg=F.filter(a=>a.x.g1!=null&&a.x.g3!=null).map(a=>a.x.g3-a.x.g1);
+ const sec4=sech('Fadiga: começo × fim do treino')+(F.length>=3?card('Treinos de 8 km ou mais','1º terço contra último terço. Cadência caindo e contato com o solo subindo no fim indicam fadiga mecânica.',`<div class="sc" style="max-height:none"><table><thead><tr><th class="l">Data</th><th class="l">Treino</th><th>km</th><th>Cadência</th><th>Variação</th><th>Contato</th><th>2ª metade</th></tr></thead><tbody>${fr}</tbody></table></div>`,`<p class="note">Mediana: cadência ${sgn1(median(dc))} spm${dg.length?` e contato ${sgn1(median(dg))} ms`:''} do começo ao fim.</p>`):noX('Cadência do início e do fim.'));
+ /* calor */
+ const T=L.filter(a=>a.x.tp!=null);
+ const bands=[[0,18,'abaixo de 18 °C'],[18,22,'18 a 22 °C'],[22,26,'22 a 26 °C'],[26,30,'26 a 30 °C'],[30,99,'acima de 30 °C']];
+ const EZ=T.filter(isEasy);
+ const br=bands.map(([lo,hi,n])=>{const g=EZ.filter(a=>a.x.tp>=lo&&a.x.tp<hi);if(!g.length)return'';return`<tr><td class="l">${n}</td><td>${g.length}</td><td>${fmtP(mean(g.map(a=>a.pace)))}</td><td>${f1(mean(g.map(a=>a.hr)),0)}</td><td>${f1(mean(g.map(EF)),3)}</td></tr>`}).join('');
+ const sp=EZ.length>=8?scatter({pts:ptsOf(EZ,a=>a.x.tp,a=>EF(a)),yfmt:v=>f1(v,2),xfmt:v=>Math.round(v)+'°'}):'';
+ const hot=EZ.filter(a=>a.x.tp>=26),cool=EZ.filter(a=>a.x.tp<22);
+ const cost=hot.length>=3&&cool.length>=3?`<p class="note">Em treino fácil, acima de 26 °C a sua eficiência (EF) fica ${f1(Math.abs(mean(hot.map(EF))/mean(cool.map(EF))-1)*100,0)}% ${mean(hot.map(EF))<mean(cool.map(EF))?'menor':'maior'} que abaixo de 22 °C.</p>`:'';
+ const sec5=sech('Calor')+(T.length>=5?`<div class="grid g2">${card('Eficiência por faixa de temperatura','Só treinos fáceis (comparáveis). EF = velocidade ÷ FC; maior é melhor.',br?`<div class="sc" style="max-height:none"><table><thead><tr><th class="l">Temperatura</th><th>Treinos</th><th>Ritmo</th><th>FC</th><th>EF</th></tr></thead><tbody>${br}</tbody></table></div>`:noData,cost+'<p class="note">A temperatura vem do sensor do relógio, que lê alguns graus acima do ar quando você está parado ou protegido do vento.</p>')}${card('EF × temperatura','Cada ponto é um treino fácil.',sp||noData)}</div>`:noX('Temperatura.'));
+ /* terreno */
+ const G=L.filter(a=>a.x.gap!=null).slice(0,12);
+ const gr=G.map(a=>{const d=a.pace-a.x.gap;return`<tr><td class="l">${fmtD(a.ms)}</td><td class="l t">${esc(a.title)}</td><td>${f1(a.km,1)}</td><td>${a.x.up!=null?Math.round(a.x.up)+' m':'—'}</td><td>${fmtP(a.pace)}</td><td>${fmtP(a.x.gap)}</td><td>${Math.abs(d)<1.5?'=':(d>0?'−':'+')+Math.round(Math.abs(d))+' s'}</td></tr>`}).join('');
+ const wk=weeklyAll().slice(-13,-1),wup=wk.map(w=>sum(L.filter(a=>weekStart(a.ms)===w.w).map(a=>a.x.up||0)));
+ const sec6=sech('Terreno')+`<div class="grid g2">${G.length?card('Ritmo real × ritmo ajustado à inclinação','GAP: o ritmo que o seu esforço equivale no plano. Se o GAP é mais rápido que o real, o percurso era duro.',`<div class="sc" style="max-height:none"><table><thead><tr><th class="l">Data</th><th class="l">Treino</th><th>km</th><th>Subida</th><th>Real</th><th>GAP</th><th>Custo</th></tr></thead><tbody>${gr}</tbody></table></div>`):card('Ritmo ajustado','',noX('Altimetria.'))}${sum(wup)>0?card('Subida por semana','Metros de ganho de elevação nas últimas 12 semanas.',barChart({cats:wk.map(w=>w.w),vals:wup,labels:wk.map(w=>fmtDM(w.w)),tip:i=>`<b>Semana de ${fmtD(wk[i].w)}</b><br>${Math.round(wup[i])} m de subida`,h:200})):card('Subida por semana','',noX('Altimetria.'))}</div>`;
+ /* carga Garmin */
+ const LD=L.filter(a=>a.x.ld!=null&&a.hr>0);
+ const rr=LD.length>=8?pearson(LD.map(trimp),LD.map(a=>a.x.ld)):null;
+ const TE=L.filter(a=>a.x.te!=null&&a.ms>=N-89*DAY),tb=[[0,2,'Manutenção (menos de 2)'],[2,3,'Melhora (2 a 3)'],[3,4,'Melhora forte (3 a 4)'],[4,5.1,'Muito forte (4 ou mais)']];
+ const ter=tb.map(([lo,hi,n])=>`<tr><td class="l">${n}</td><td>${TE.filter(a=>a.x.te>=lo&&a.x.te<hi).length}</td></tr>`).join('');
+ const sec7=sech('Carga de treino: Garmin × este painel')+`<div class="grid g2">${LD.length>=8?card('Carga Garmin × TRIMP','Cada ponto é uma corrida. As duas medidas devem andar juntas.',scatter({pts:ptsOf(LD,a=>trimp(a),a=>a.x.ld),yfmt:v=>Math.round(v),xfmt:v=>Math.round(v)}),rr!=null?`<p class="note">Correlação ${f2(rr)}. ${rr>.8?'As duas contam a mesma história; pode confiar na carga do painel.':'Elas divergem em parte: o Garmin considera efeito de treino e recuperação, o painel só FC e duração.'}</p>`:''):card('Carga Garmin','',noX('Carga de treino.'))}${TE.length>=3?card('Efeito aeróbico, últimos 90 dias','Quantas corridas caíram em cada faixa.',`<div class="sc" style="max-height:none"><table><thead><tr><th class="l">Faixa</th><th>Corridas</th></tr></thead><tbody>${ter}</tbody></table></div>`,`<p class="note">Treino bom para evoluir costuma ficar entre 3 e 4; muitos treinos abaixo de 2 só mantêm o nível.</p>`):card('Efeito de treino','',noX('Efeito aeróbico.'))}</div>`;
+ return sec1+sec2+sec3+sec4+sec5+sec6+sec7}
+const sgn1=v=>v==null?'—':(v>=0?'+':'−')+f1(Math.abs(v),0);
+const f2=v=>v==null?'—':(v<0?'−':'')+Math.abs(v).toFixed(2).replace('.',',');
+
+function pgBody(){const D=(WX.d||[]).map(r=>({d:r[0],ms:toMs(r[0]),deep:r[1],rem:r[2],lig:r[3],awk:r[4],st:r[5],stp:r[6],sp:r[7],rs:r[8]})).sort((a,b)=>a.ms-b.ms),N=NOW();
+ if(!D.length)return noX('Sono por fases, estresse e passos.');
+ const win_=(n)=>D.filter(r=>r.ms>=N-(n-1)*DAY),w14=win_(14),p14=D.filter(r=>r.ms<N-13*DAY&&r.ms>=N-27*DAY);
+ const av=(L,k)=>{const v=L.map(r=>r[k]).filter(v=>v!=null);return v.length>=3?mean(v):null};
+ const tot=r=>(r.deep||0)+(r.rem||0)+(r.lig||0);
+ const pc=(L,k)=>{const v=L.filter(r=>r[k]!=null&&tot(r)>2).map(r=>r[k]/tot(r)*100);return v.length>=3?mean(v):null};
+ const K=[['Sono profundo',pc(w14,'deep'),pc(p14,'deep'),'% do sono','%',0,1],['Sono REM',pc(w14,'rem'),pc(p14,'rem'),'% do sono','%',0,1],['Estresse médio',av(w14,'st'),av(p14,'st'),'0 a 100','',0,-1],['Passos por dia',av(w14,'stp'),av(p14,'stp'),'média','',0,0],['SpO₂',av(w14,'sp'),av(p14,'sp'),'%','%',0,0],['Respiração',av(w14,'rs'),av(p14,'rs'),'resp./min','',1,0]].filter(k=>k[1]!=null);
+ const kp=K.map(([n,v,pv,sub,u,d,dir])=>kpiCard(n,f1(v,d)+(u?'<small>'+u+'</small>':''),sub+' · 14 dias',pv==null?'':delta(v,pv,{dir,mode:'abs',dec:d,unit:u,tol:d?.2:1}))).join('');
+ const wks=[];for(let i=11;i>=0;i--){const lo=N-(i*7+6)*DAY,hi=N-i*7*DAY,g=D.filter(r=>r.ms>=lo&&r.ms<=hi&&tot(r)>2);wks.push({lo,g})}
+ const st=wks.map(w=>w.g.length>=2?[mean(w.g.map(r=>r.deep||0)),mean(w.g.map(r=>r.rem||0)),mean(w.g.map(r=>r.lig||0))]:[0,0,0]);
+ const sch=st.some(s=>sum(s)>0)?stackChart({cats:wks.map(w=>w.lo),stacks:st,colors:[C[0],C[5],NEU],labels:wks.map(w=>fmtDM(w.lo)),yfmt:v=>f1(v,0)+'h',tip:i=>`<b>Semana de ${fmtD(wks[i].lo)}</b><br>Profundo ${f1(st[i][0])} h · REM ${f1(st[i][1])} h · Leve ${f1(st[i][2])} h`}):noX('Fases do sono.');
+ const sl=card('Fases do sono por semana','Média por noite, últimas 12 semanas.',sch,legend([['Profundo',C[0]],['REM',C[5]],['Leve',NEU]]));
+ const d90=D.filter(r=>r.ms>=N-89*DAY),line=(k,c,fm,un)=>d90.filter(r=>r[k]!=null).length>=7?lineChart({xs:d90.map(r=>r.ms),series:[{c,vals:d90.map(r=>r[k]),sw:1.2,op:.4,nodots:true},{c,vals:movAvg(d90.map(r=>r[k]),7),area:true}],xfmt:fmtDM,yfmt:fm,tip:i=>`<b>${fmtD(d90[i].ms)}</b><br>${d90[i][k]==null?'—':f1(d90[i][k],0)+un}`,h:200}):noX('Este dado.');
+ /* sono e estresse x eficiência no dia seguinte */
+ const byD=new Map(D.map(r=>[r.d,r])),ez=ACTS.filter(isEasy);
+ const pr=ez.map(a=>{const p=byD.get(new Date(a.ms-DAY).toISOString().slice(0,10)),n=byD.get(a.d);return{a,p,n}}).filter(o=>o.n||o.p);
+ const cr=(f)=>{const v=pr.filter(o=>f(o)!=null);return v.length>=12?{r:pearson(v.map(f),v.map(o=>EF(o.a))),n:v.length}:null};
+ const cs=[['Sono profundo da noite',cr(o=>o.n&&o.n.deep!=null&&tot(o.n)>2?o.n.deep/tot(o.n)*100:null)],['Horas de sono da noite',cr(o=>o.n&&tot(o.n)>2?tot(o.n):null)],['Estresse do dia anterior',cr(o=>o.p?o.p.st:null)],['Passos do dia anterior',cr(o=>o.p?o.p.stp:null)]].filter(c=>c[1]);
+ const rel=cs.length?card('O que anda junto com um treino fácil eficiente','Correlação (−1 a +1) entre cada hábito e a eficiência (EF) do treino fácil seguinte.',`<div class="sc" style="max-height:none"><table><thead><tr><th class="l">Hábito</th><th>Correlação</th><th>Treinos</th></tr></thead><tbody>${cs.map(([n,c])=>`<tr><td class="l">${n}</td><td>${c.r==null?'—':f2(c.r)}</td><td>${c.n}</td></tr>`).join('')}</tbody></table></div>`,`<p class="note">Valores abaixo de 0,3 (em módulo) são fracos e podem ser acaso. Correlação não prova causa.</p>`):'';
+ /* peso */
+ const W=(WX.w||[]).map(r=>({d:r[0],ms:toMs(r[0]),kg:r[1],fat:r[2]})).sort((a,b)=>a.ms-b.ms),lastW=W[W.length-1];
+ let wp;if(!W.length)wp=card('Peso','',`<p class="note">Nenhuma medição de peso chegou do Garmin. Pese-se na balança conectada ou lance o peso no Garmin Connect para ele aparecer aqui.</p>`);
+ else{const age=Math.round((N-lastW.ms)/DAY),old=age>14;const w90=W.filter(r=>r.ms>=N-179*DAY);
+  wp=card('Peso',old?`Última medição há ${age} dias (${fmtD(lastW.ms)}): ${f1(lastW.kg)} kg. Está desatualizado; eu não usaria este número para nada até pesar de novo.`:`Última medição: ${f1(lastW.kg)} kg em ${fmtD(lastW.ms)}.`,w90.length>=3?lineChart({xs:w90.map(r=>r.ms),series:[{c:C[1],vals:w90.map(r=>r.kg),area:true}],xfmt:fmtDM,yfmt:v=>f1(v,1),tip:i=>`<b>${fmtD(w90[i].ms)}</b><br>${f1(w90[i].kg)} kg`,h:200}):'',`<p class="note">Pesar toda semana, no mesmo horário e em jejum, vale mais do que muitos dados soltos. Peso afeta o ritmo: perto de 1 kg a menos costuma valer 2 a 3 s/km.</p>`)}
+ return`<div class="grid kpis">${kp}</div>`+sech('Sono e rotina')+`<div class="grid g2">${sl}${card('Estresse','Média diária e média de 7 dias, últimos 90 dias.',line('st',C[1],v=>Math.round(v),''))}${card('Passos por dia','Média de 7 dias, últimos 90 dias.',line('stp',C[2],v=>f1(v/1000,0)+'k',''))}${rel||''}</div>`+sech('Peso')+wp}
+
 /* ============ navegação e render ============ */
 const PAGES=[
  ['resumo','Resumo','Como você está hoje',pgResumo,0,'<path d="M4 13a8 8 0 1 1 16 0"/><path d="M12 13l4-5"/><path d="M5 19h14"/>'],
  ['comparativos','Comparativos','Um período contra o outro',pgComparativos,0,'<path d="M7 4v16M7 4L3 8M7 4l4 4"/><path d="M17 20V4m0 16l4-4m-4 4l-4-4"/>'],
  ['meta','Meta e projeção','Quanto falta e o que mudar',pgMeta,0,'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>'],
  ['plano','Plano de treino','Próximas semanas',pgPlano,0,'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>'],
+ ['biomec','Biomecânica e clima','Passada, calor, terreno e carga',pgBio,0,'<circle cx="12" cy="5" r="2"/><path d="M12 8v6l-3 6M12 14l3 6M8 11l4-1 4 2"/>'],
+ ['corpo','Corpo e rotina','Sono, estresse e peso',pgBody,0,'<path d="M12 21s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.500-7 10-7 10z"/>'],
  ['volume','Volume','Quanto você corre',pgVolume,1,'<path d="M5 20V11M12 20V4M19 20v-6"/>'],
  ['carga','Carga','Forma, fadiga e equilíbrio',pgCarga,1,'<path d="M3 12h4l3-8 4 16 3-8h4"/>'],
  ['intensidade','Intensidade','Onde você passa o tempo',pgIntens,1,'<path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3 0-6 1-9z"/>'],
