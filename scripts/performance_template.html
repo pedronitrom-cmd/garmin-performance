@@ -146,6 +146,37 @@ a{color:#8fb8ff}
  .heroin{grid-template-columns:1fr;justify-items:center;text-align:center} .hero .comp{text-align:left;width:100%}
 }
 @media(max-width:560px){.ring{width:148px;height:148px}.cp{grid-template-columns:96px 1fr 34px}th,td{padding:6px 7px}}
+
+/* ---------- brilho e movimento ---------- */
+.card{transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease;animation:rise .55s cubic-bezier(.2,.7,.2,1) both}
+.card:hover{transform:translateY(-2px);border-color:var(--bd2);box-shadow:0 16px 40px rgba(0,0,0,.34)}
+main>.grid>.card:nth-child(2){animation-delay:.05s}main>.grid>.card:nth-child(3){animation-delay:.1s}main>.grid>.card:nth-child(4){animation-delay:.15s}main>.grid>.card:nth-child(5){animation-delay:.2s}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.ln{stroke-dasharray:1;stroke-dashoffset:0;animation:draw 1.3s ease-out both;filter:drop-shadow(0 2px 6px color-mix(in srgb,var(--c,#4c8dff) 55%,transparent))}
+@keyframes draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+.gp{animation:gdraw 1.2s cubic-bezier(.2,.8,.2,1) both}
+@keyframes gdraw{from{stroke-dasharray:0 400}}
+.rd{transform-origin:190px 150px;animation:rpop .9s cubic-bezier(.2,.8,.2,1) both}
+@keyframes rpop{from{transform:scale(.2);opacity:0}}
+.hc{transition:opacity .15s}.hc:hover{opacity:.7;stroke:#fff;stroke-width:1}
+.bgrow path{transform-box:fill-box;transform-origin:bottom;animation:grow .7s cubic-bezier(.2,.8,.2,1) both}
+@keyframes grow{from{transform:scaleY(0)}}
+.pano{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding:22px 24px;border:1px solid transparent;background:radial-gradient(600px 220px at 85% 0,rgba(76,141,255,.22),transparent 70%),radial-gradient(500px 200px at 10% 120%,rgba(34,211,197,.16),transparent 70%),linear-gradient(160deg,#16203a,#111829 70%) padding-box,var(--grad) border-box}
+.pano h3{margin:0;font-size:26px;letter-spacing:-.02em}.pano p{margin:4px 0 0;color:var(--tx2)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{padding:7px 13px;border-radius:99px;background:rgba(255,255,255,.06);border:1px solid var(--bd2);font-size:12.5px;color:var(--tx2)}.chip b{color:#fff;font-size:15px;margin-right:3px}
+.gg{grid-template-columns:repeat(auto-fit,minmax(min(100%,235px),1fr))}
+@media(max-width:560px){.gg{grid-template-columns:1fr 1fr}.gauge svg{width:118px;height:118px}.gauge .gv{height:118px;top:16px}.gauge .gv b{font-size:27px}.pano h3{font-size:21px}}
+.gauge{display:grid;justify-items:center;padding:16px 12px 14px;text-align:center;position:relative}
+.gauge svg{width:150px;height:150px}
+.gauge .gv{position:absolute;top:16px;left:0;right:0;height:150px;display:grid;place-content:center}
+.gauge .gv b{font-size:34px;font-weight:700;letter-spacing:-.03em;line-height:1}.gauge .gv span{font-size:11px;color:var(--mu);margin-top:3px}
+.gauge .gl{font-size:12.5px;color:var(--tx2);margin-top:6px;min-height:2.4em}
+.pr{padding:16px 18px;display:grid;gap:3px;overflow:hidden}
+.pr:before{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(250,178,25,.28),transparent 70%)}
+.pr b{font-size:30px;letter-spacing:-.02em;background:linear-gradient(135deg,#ffe29a,#fab219 60%,#e06a30);-webkit-background-clip:text;background-clip:text;color:transparent;width:max-content}
+.pr i{font-style:normal;font-size:12px;color:var(--mu)}
+.medal{width:max-content;font-size:11px;font-weight:700;letter-spacing:.06em;padding:2px 9px;border-radius:99px;background:rgba(250,178,25,.14);color:#fab219;border:1px solid rgba(250,178,25,.4)}
+@media(prefers-reduced-motion:reduce){.card,.ln,.gp,.rd,.bgrow path{animation:none!important}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
@@ -199,7 +230,7 @@ const pill=(k,extra='')=>`<span class="pill"><i style="background:${CATC[k]||NEU
 
 /* ============ dados ============ */
 let ACTS=[],REC={m:[],r:[],k:{}},SRC='Garmin Connect (sync automático)';
-const S={page:'resumo',range:'12m',hrmax:190,hrrest:45,cat:'',q:'',sort:'ms',desc:true,all:false,cmp:'28d',race:'',xrace:'',dpw:5,goal:{d:'10k',t:'38:30',date:''}};
+const S={page:'pano',range:'12m',hrmax:190,hrrest:45,cat:'',q:'',sort:'ms',desc:true,all:false,cmp:'28d',race:'',xrace:'',dpw:5,goal:{d:'10k',t:'38:30',date:''}};
 
 function classify(a){const t=norm(a.title);
  if(/simulador/.test(t))return'Limiar/Ritmo';
@@ -253,9 +284,9 @@ function lineChart({xs,series,w=CW(),h=230,yfmt=v=>v,ymin,ymax,xfmt=fmtM,tip,ref
  refs.forEach(r=>s+=`<line x1="${F.m.l}" x2="${w-F.m.r}" y1="${y(r.v)}" y2="${y(r.v)}" stroke="${r.c||NEU}" stroke-dasharray="4 4"/><text x="${w-F.m.r}" y="${y(r.v)-4}" text-anchor="end">${esc(r.t)}</text>`);
  series.forEach(se=>{const segs=[];let cur=null;se.vals.forEach((v,i)=>{if(v==null||xs[i]==null){cur=null;return}if(!cur){cur=[];segs.push(cur)}cur.push([x(xs[i]),y(v)])});
   const base=F.m.t+F.ih;
-  segs.forEach(g=>{const d=g.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join('');
+  segs.forEach(g=>{const d=g.length>=4&&!se.raw?mono(g):g.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join('');
    if(se.area&&g.length>1){const id=gid();defs+=gradV(id,se.c,se.areaO||.38,0);s+=`<path d="${d}L${g[g.length-1][0].toFixed(1)} ${base}L${g[0][0].toFixed(1)} ${base}Z" fill="url(#${id})"/>`}
-   s+=`<path d="${d}" fill="none" stroke="${se.c}" stroke-width="${se.sw||2}" stroke-linejoin="round" stroke-linecap="round"${se.dash?' stroke-dasharray="5 4"':''}${se.op?` opacity="${se.op}"`:''}/>`;
+   s+=`<path d="${d}" fill="none" stroke="${se.c}" stroke-width="${se.sw||2}" stroke-linejoin="round" stroke-linecap="round"${se.dash?' stroke-dasharray="5 4"':' class="ln" pathLength="1"'}${se.op?` opacity="${se.op}"`:''} style="--c:${se.c}"/>`;
    if(endLabels&&se.n&&g===segs[segs.length-1]){const p=g[g.length-1];s+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4" fill="${se.c}" class="pt"/><text class="dl2" x="${(p[0]+8).toFixed(1)}" y="${(p[1]+4).toFixed(1)}">${esc(se.n)}</text>`}});
   if(xs.length<=40&&!se.nodots)se.vals.forEach((v,i)=>{if(v!=null)s+=`<circle cx="${x(xs[i]).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.4" fill="${se.c}" class="pt"/>`})});
  const n=xs.length;xs.forEach((xv,i)=>{const a=i?(x(xs[i-1])+x(xv))/2:F.m.l,b=i<n-1?(x(xv)+x(xs[i+1]))/2:w-F.m.r;
@@ -266,12 +297,12 @@ const barPath=(bx,ww,yt,yb)=>{const hh=Math.max(0,yb-yt),r=Math.min(4,ww/2,hh);r
 function barChart({cats,vals,w=CW(),h=230,color=C[0],tip,yfmt=v=>v,labels,line,lineC=C[1],hl}){
  if(!cats.length)return noData;
  const F=frame(w,h,{l:46,r:14,t:12,b:26});const hi0=Math.max(...vals,...(line||[]).filter(v=>v!=null),1);const tk=nice(0,hi0,5),hi=tk[tk.length-1];
- const y=v=>F.m.t+F.ih-v/hi*F.ih;const bw=F.iw/cats.length;const id=gid();let s=yGrid(F,y,tk,yfmt);
+ const y=v=>F.m.t+F.ih-v/hi*F.ih;const bw=F.iw/cats.length;const id=gid();let s=yGrid(F,y,tk,yfmt)+'<g class="bgrow">';
  const step=Math.ceil(cats.length/8);cats.forEach((c,i)=>{if(i%step===0)s+=`<text x="${F.m.l+bw*(i+.5)}" y="${h-F.m.b+17}" text-anchor="middle">${labels?labels[i]:c}</text>`});
  const pad=Math.min(2,bw*.15);
  vals.forEach((v,i)=>{const bx=F.m.l+bw*i+pad,ww=Math.max(1,bw-2*pad);
   if(v>0)s+=`<path d="${barPath(bx,ww,y(v),F.m.t+F.ih)}" fill="url(#${id})"${hl!=null&&i!==hl?' opacity=".8"':''}/>`;
-  s+=`<rect class="hit" x="${F.m.l+bw*i}" y="${F.m.t}" width="${bw}" height="${F.ih}"${tipA(tip(i))}/>`});
+  s+=`<rect class="hit" x="${F.m.l+bw*i}" y="${F.m.t}" width="${bw}" height="${F.ih}"${tipA(tip(i))}/>`});s+='</g>';
  if(line){let d='',pen=false;line.forEach((v,i)=>{if(v==null){pen=false;return}d+=(pen?'L':'M')+(F.m.l+bw*(i+.5)).toFixed(1)+' '+y(v).toFixed(1);pen=true});s+=`<path d="${d}" fill="none" stroke="${lineC}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" pointer-events="none"/>`}
  return`<svg viewBox="0 0 ${w} ${h}" role="img"><defs>${gradV(id,color,1,.55)}</defs>${s}</svg>`}
 
@@ -509,9 +540,7 @@ function pgCarga(){const L=loadSeries();const s=Math.max(sinceMs(),toMs('2025-02
  const t2=lineChart({xs,series:[{c:C[2],vals:sl(L.tsb)}],refs:[{v:0,t:'0'},{v:-20,t:'sobrecarga',c:'#d03b3b'},{v:5,t:'fresco',c:'#0ca30c'}],tip:i=>`<b>${fmtD(xs[i])}</b><br>TSB ${f1(sl(L.tsb)[i],0)}`,yfmt:v=>f1(v,0)});
  const W=weeklyAll(),idx=W.findIndex(w=>w.w+6*DAY>=sinceMs()),ws=W.slice(Math.max(0,idx));
  const t3=barChart({cats:ws.map(w=>w.w),vals:ws.map(w=>w.load),labels:ws.map(w=>fmtM(w.w)),color:C[3],tip:i=>`<b>Semana de ${fmtD(ws[i].w)}</b><br>Carga ${f1(ws[i].load,0)} · ${f1(ws[i].km)} km`,yfmt:v=>f1(v,0)});
- return kp+`<div class="grid g2 mt">
- ${card('Forma × fadiga','CTL = média 42d da carga · ATL = média 7d. TRIMP de Banister (FC de reserva). Começa em fev/2025 porque o início do histórico tem lacunas.',t1,legend([['Forma (CTL)',C[0]],['Fadiga (ATL)',C[1]]]))}
- ${card('Equilíbrio (TSB = forma − fadiga)','Acima de +5: fresco · −10 a +5: neutro · abaixo de −20: risco de sobrecarga',t2)}
+ return kp+`<div class="mt">${card('Forma, fadiga e equilíbrio','Azul = forma (CTL, 42 dias) · laranja = fadiga (ATL, 7 dias) · bandeiras = provas. Embaixo, o equilíbrio (TSB) com zonas: verde-claro = fresco, azul = bom para evoluir, vermelho = risco de sobrecarga. TRIMP de Banister.',pmc(Math.max(30,xs.length)),legend([['Forma (CTL)',C[0]],['Fadiga (ATL)',C[1]],['Equilíbrio (TSB)',C[2]]]))}</div><div class="grid g2 mt">
  ${card('Carga semanal (TRIMP)','Soma da carga das sessões da semana',t3)}
  ${card('Como ler','',`<ul class="q"><li><b>CTL</b> sobe devagar: é a sua base de condicionamento.</li><li><b>ATL</b> sobe rápido depois de semanas pesadas e cai em poucos dias.</li><li><b>TSB</b> negativo = você está carregando fadiga; positivo = descansado.</li><li>É um modelo, não verdade absoluta: intervalados curtos subestimam esforço porque a FC média é diluída. Ajuste FC máxima e de repouso no menu lateral.</li></ul>`)}
  </div>`}
@@ -900,8 +929,153 @@ function pgBody(){const D=(WX.d||[]).map(r=>({d:r[0],ms:toMs(r[0]),deep:r[1],rem
   wp=card('Peso',old?`Última medição há ${age} dias (${fmtD(lastW.ms)}): ${f1(lastW.kg)} kg. Está desatualizado; eu não usaria este número para nada até pesar de novo.`:`Última medição: ${f1(lastW.kg)} kg em ${fmtD(lastW.ms)}.`,w90.length>=3?lineChart({xs:w90.map(r=>r.ms),series:[{c:C[1],vals:w90.map(r=>r.kg),area:true}],xfmt:fmtDM,yfmt:v=>f1(v,1),tip:i=>`<b>${fmtD(w90[i].ms)}</b><br>${f1(w90[i].kg)} kg`,h:200}):'',`<p class="note">Pesar toda semana, no mesmo horário e em jejum, vale mais do que muitos dados soltos. Peso afeta o ritmo: perto de 1 kg a menos costuma valer 2 a 3 s/km.</p>`)}
  return`<div class="grid kpis">${kp}</div>`+sech('Sono e rotina')+`<div class="grid g2">${sl}${card('Estresse','Média diária e média de 7 dias, últimos 90 dias.',line('st',C[1],v=>Math.round(v),''))}${card('Passos por dia','Média de 7 dias, últimos 90 dias.',line('stp',C[2],v=>f1(v/1000,0)+'k',''))}${rel||''}</div>`+sech('Peso')+wp}
 
+/* ============ Panorama: gráficos de destaque ============ */
+function mono(P){const n=P.length;if(n<3)return P.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join('');
+ const dx=[],s=[],t=[];for(let i=0;i<n-1;i++){dx[i]=P[i+1][0]-P[i][0];s[i]=dx[i]?(P[i+1][1]-P[i][1])/dx[i]:0}
+ t[0]=s[0];t[n-1]=s[n-2];for(let i=1;i<n-1;i++)t[i]=s[i-1]*s[i]<=0?0:(s[i-1]+s[i])/2;
+ for(let i=0;i<n-1;i++){if(s[i]===0){t[i]=t[i+1]=0}else{const a=t[i]/s[i],b=t[i+1]/s[i],h=a*a+b*b;if(h>9){const k=3/Math.sqrt(h);t[i]=k*a*s[i];t[i+1]=k*b*s[i]}}}
+ let d='M'+P[0][0].toFixed(1)+' '+P[0][1].toFixed(1);
+ for(let i=0;i<n-1;i++){const h=dx[i]/3;d+=`C${(P[i][0]+h).toFixed(1)} ${(P[i][1]+t[i]*h).toFixed(1)} ${(P[i+1][0]-h).toFixed(1)} ${(P[i+1][1]-t[i+1]*h).toFixed(1)} ${P[i+1][0].toFixed(1)} ${P[i+1][1].toFixed(1)}`}return d}
+
+/* anel de pontuação animado */
+function gauge({v,max=100,val,label,sub,c1='#22d3c5',c2='#4c8dff',fmt}){const id=gid(),r=52,c=2*Math.PI*r,p=clamp(v/max*100)/100;
+ return`<div class="card gauge"><svg viewBox="0 0 140 140" role="img" aria-label="${esc(label)}"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient>
+ <filter id="${id}f" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.2"/></filter></defs>
+ <circle cx="70" cy="70" r="${r}" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="11"/>
+ <circle cx="70" cy="70" r="${r+10}" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="1" stroke-dasharray="1.5 4.2"/>
+ <g transform="rotate(-90 70 70)"><circle class="gp" cx="70" cy="70" r="${r}" fill="none" stroke="${c1}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${(c*p).toFixed(1)} ${c.toFixed(1)}" opacity=".55" filter="url(#${id}f)" style="--len:${(c*p).toFixed(1)}"/>
+ <circle class="gp" cx="70" cy="70" r="${r}" fill="none" stroke="url(#${id})" stroke-width="11" stroke-linecap="round" stroke-dasharray="${(c*p).toFixed(1)} ${c.toFixed(1)}" style="--len:${(c*p).toFixed(1)}"/></g></svg>
+ <div class="gv"><b>${val}</b><span>${sub||''}</span></div><div class="gl">${label}</div></div>`}
+
+/* calendário de calor (53 semanas) */
+function heatCal(){const N=NOW(),last=weekStart(N)+6*DAY,mob=innerWidth<700,w=mob?460:1000,cols=mob?27:53,gap=3,lm=30,cell=(w-lm-4)/cols-gap,hh=7*(cell+gap)+26;
+ const m=new Map();ACTS.forEach(a=>{const o=m.get(a.d)||{km:0,n:0,t:[],race:false};o.km+=a.km;o.n++;o.t.push(a.title+' ('+f1(a.km,1)+' km)');if(isRaceAct(a)&&a.km>=4.5)o.race=true;m.set(a.d,o)});
+ const col=['rgba(255,255,255,.05)','#164a66','#1a7a8f','#1fb0a6','#4c8dff','#8f80ee'],lv=k=>k<=0?0:k<5?1:k<8?2:k<12?3:k<16?4:5;
+ let s='',first=last-(cols*7-1)*DAY,tot=0,days=0;
+ for(let wk=0;wk<cols;wk++){const ws=first+wk*7*DAY,d0=new Date(ws);
+  if(d0.getUTCDate()<=7)s+=`<text x="${lm+wk*(cell+gap)}" y="10">${MES[d0.getUTCMonth()]}</text>`;
+  for(let dw=0;dw<7;dw++){const ms=ws+dw*DAY;if(ms>N)continue;const k=new Date(ms).toISOString().slice(0,10),o=m.get(k),x=lm+wk*(cell+gap),y=20+dw*(cell+gap);
+   if(o){tot+=o.km;days++}
+   const tip=`<b>${fmtD(ms)}</b><br>${o?f1(o.km,1)+' km<br>'+o.t.map(esc).join('<br>'):'sem treino'}`;
+   s+=`<rect class="hc" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cell.toFixed(1)}" height="${cell.toFixed(1)}" rx="${(cell*.28).toFixed(1)}" fill="${col[lv(o?o.km:0)]}"${o&&o.race?' stroke="#ff8a6b" stroke-width="1.6"':''}${tipA(tip)}/>`}}
+ ['Seg','Qua','Sex'].forEach((n,i)=>s+=`<text x="0" y="${20+i*2*(cell+gap)+cell*.8}">${n}</text>`);
+ const lg=`<div class="lg" style="justify-content:flex-end;align-items:center">menos ${col.map(c=>`<i style="background:${c};margin:0 2px"></i>`).join('')} mais<span style="margin-left:14px"><i style="background:transparent;border:1.6px solid #ff8a6b"></i>prova</span></div>`;
+ return{svg:`<svg viewBox="0 0 ${w} ${hh.toFixed(0)}" role="img" aria-label="Calendário de treinos">${s}</svg>`,lg,tot,days}}
+
+/* forma × fadiga × equilíbrio no estilo TrainingPeaks/Intervals */
+function pmc(nDays=180){const L=loadSeries(),n=L.xs.length,from=Math.max(0,n-nDays),w=CW(),h=360,F={l:46,r:14},pw=w-F.l-F.r,hT=200,gapY=26,hB=96,t0=14;
+ const xs=L.xs.slice(from),ctl=L.ctl.slice(from),atl=L.atl.slice(from),tsb=L.tsb.slice(from),x0=xs[0],x1=xs[xs.length-1],X=v=>F.l+(v-x0)/(x1-x0)*pw;
+ const hi=Math.max(...ctl,...atl)*1.08,tkA=nice(0,hi,4),yA=v=>t0+hT-v/tkA[tkA.length-1]*hT;
+ const tl=Math.min(-35,...tsb),th=Math.max(30,...tsb),yB0=t0+hT+gapY,yB=v=>yB0+hB-(v-tl)/(th-tl)*hB,id=gid();
+ let s='',defs=gradV(id+'a','#4c8dff',.5,0)+gradV(id+'g','#22d3c5',.55,.02)+gradV(id+'o','#e06a30',.02,.55)+`<clipPath id="${id}u"><rect x="${F.l}" y="${yB0}" width="${pw}" height="${(yB(0)-yB0).toFixed(1)}"/></clipPath><clipPath id="${id}d"><rect x="${F.l}" y="${yB(0).toFixed(1)}" width="${pw}" height="${(yB0+hB-yB(0)).toFixed(1)}"/></clipPath>`;
+ tkA.forEach(v=>s+=`<line x1="${F.l}" x2="${w-F.r}" y1="${yA(v)}" y2="${yA(v)}" stroke="#232d45"/><text x="${F.l-7}" y="${yA(v)+3.5}" text-anchor="end">${v}</text>`);
+ const bands=[[25,th+5,'rgba(143,128,238,.10)','transição'],[5,25,'rgba(23,165,147,.14)','fresco'],[-10,5,'rgba(255,255,255,.03)','neutro'],[-30,-10,'rgba(76,141,255,.10)','ótimo p/ evoluir'],[tl-5,-30,'rgba(208,59,59,.14)','risco']];
+ bands.forEach(([a,b,c,n])=>{const ya=yB(Math.min(b,th)),yb=yB(Math.max(a,tl));if(yb>ya)s+=`<rect x="${F.l}" y="${ya.toFixed(1)}" width="${pw}" height="${(yb-ya).toFixed(1)}" fill="${c}"/><text x="${w-F.r-4}" y="${(ya+11).toFixed(1)}" text-anchor="end" style="font-size:9.5px;opacity:.75">${n}</text>`});
+ s+=`<line x1="${F.l}" x2="${w-F.r}" y1="${yB(0).toFixed(1)}" y2="${yB(0).toFixed(1)}" stroke="#4a5878" stroke-dasharray="3 4"/>`;
+ [-30,-10,5,25].forEach(v=>{if(v>tl&&v<th)s+=`<text x="${F.l-7}" y="${yB(v)+3.5}" text-anchor="end">${v}</text>`});
+ const step=Math.ceil(xs.length/6/30)*30;let lastM=-1;xs.forEach((v,i)=>{const d=new Date(v);if(d.getUTCDate()===1&&d.getUTCMonth()!==lastM){lastM=d.getUTCMonth();s+=`<line x1="${X(v).toFixed(1)}" x2="${X(v).toFixed(1)}" y1="${t0}" y2="${yB0+hB}" stroke="#1b2540"/><text x="${X(v).toFixed(1)}" y="${h-6}" text-anchor="middle">${MES[d.getUTCMonth()]}</text>`}});
+ const pc=ctl.map((v,i)=>[X(xs[i]),yA(v)]),pa=atl.map((v,i)=>[X(xs[i]),yA(v)]),pb=tsb.map((v,i)=>[X(xs[i]),yB(v)]),dc=mono(pc),da=mono(pa),db=mono(pb),base=t0+hT;
+ s+=`<path d="${dc}L${pc[pc.length-1][0]} ${base}L${pc[0][0]} ${base}Z" fill="url(#${id}a)"/><path class="ln" pathLength="1" d="${dc}" fill="none" stroke="#4c8dff" stroke-width="2.4" style="--c:#4c8dff"/><path class="ln" pathLength="1" d="${da}" fill="none" stroke="#e06a30" stroke-width="1.8" style="--c:#e06a30"/>`;
+ const z0=yB(0).toFixed(1);
+ s+=`<g clip-path="url(#${id}u)"><path d="${db}L${pb[pb.length-1][0]} ${z0}L${pb[0][0]} ${z0}Z" fill="url(#${id}g)"/></g><g clip-path="url(#${id}d)"><path d="${db}L${pb[pb.length-1][0]} ${z0}L${pb[0][0]} ${z0}Z" fill="url(#${id}o)"/></g><path class="ln" pathLength="1" d="${db}" fill="none" stroke="#22d3c5" stroke-width="1.8" style="--c:#22d3c5"/>`;
+ ACTS.filter(a=>isRaceAct(a)&&a.km>=4.5&&a.ms>=x0&&a.ms<=x1).forEach(a=>{const xx=X(a.ms).toFixed(1);s+=`<line x1="${xx}" x2="${xx}" y1="${t0}" y2="${yB0+hB}" stroke="#ff8a6b" stroke-opacity=".5" stroke-dasharray="2 4"/><path d="M${xx} ${t0-2}l7 4-7 4z" fill="#ff8a6b"/><circle cx="${xx}" cy="${t0+2}" r="10" fill="transparent"${tipA(`<b>${esc(a.title)}</b><br>${fmtD(a.ms)} · ${f1(a.km,1)} km em ${fmtT(a.sec)}`)}/>`});
+ const stepP=Math.max(1,Math.floor(xs.length/160));xs.forEach((v,i)=>{if(i%stepP)return;const a=i?(X(xs[i-1])+X(v))/2:F.l,b=i<xs.length-1?(X(v)+X(xs[i+1]))/2:w-F.r;
+  s+=`<rect class="hit" x="${a.toFixed(1)}" y="${t0}" width="${Math.max(1,(b-a)*stepP).toFixed(1)}" height="${yB0+hB-t0}"${tipA(`<b>${fmtD(v)}</b><br>Forma (CTL) ${f1(ctl[i],0)}<br>Fadiga (ATL) ${f1(atl[i],0)}<br>Equilíbrio (TSB) ${tsb[i]>=0?'+':''}${f1(tsb[i],0)}`)}/>`});
+ s+=`<text x="${F.l}" y="${yB0-8}" style="fill:#b3bdd3;font-weight:600">Equilíbrio (forma − fadiga)</text>`;
+ return`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Forma, fadiga e equilíbrio"><defs>${defs}</defs>${s}</svg>`}
+
+/* radar de perfil: agora × 12 semanas atrás */
+function radarAxes(N){const wk=win(N-55*DAY,N),m28=win(N-27*DAY,N),yr=win(N-364*DAY,N);
+ let best28=0;for(let d=N-364*DAY+27*DAY;d<=N;d+=7*DAY)best28=Math.max(best28,sum(win(d-27*DAY,d).map(a=>a.km)));
+ const dpw=new Set(wk.map(a=>a.d)).size/8,lg=Math.max(0,...wk.map(a=>a.km)),q=wk.filter(a=>a.cat==='Intervalado'||a.cat==='Limiar/Ritmo').length;
+ const ez=win(N-55*DAY,N).filter(isEasy),ezy=win(N-364*DAY,N).filter(isEasy),ef=ez.length>=3?median(ez.map(EF)):null,efb=ezy.length>=8?Math.max(...ezy.map(EF)):null;
+ const rr=REC.r.filter(r=>r.ms>=N-55*DAY&&r.ms<=N).map(r=>r.sl).filter(v=>v!=null);
+ return[['Volume',best28?sum(m28.map(a=>a.km))/best28*100:0],['Consistência',dpw/5*100],['Resistência',lg/22*100],['Qualidade',q/8*100],['Eficiência',ef&&efb?ef/efb*100:null],['Recuperação',rr.length?mean(rr):null]].map(([n,v])=>[n,v==null?null:clamp(v)])}
+function radar(){const N=NOW(),A=radarAxes(N),B=radarAxes(N-84*DAY),n=A.length,R=112,cx=190,cy=150,w=380,h=300;
+ const pt=(i,v)=>{const a=-Math.PI/2+i*2*Math.PI/n;return[cx+Math.cos(a)*R*v/100,cy+Math.sin(a)*R*v/100]};let s='';
+ [25,50,75,100].forEach(g=>s+=`<polygon points="${A.map((_,i)=>pt(i,g).map(v=>v.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="#26314d" stroke-width="1"/>`);
+ A.forEach((a,i)=>{const e=pt(i,100),l=pt(i,124);s+=`<line x1="${cx}" y1="${cy}" x2="${e[0].toFixed(1)}" y2="${e[1].toFixed(1)}" stroke="#26314d"/><text x="${l[0].toFixed(1)}" y="${(l[1]+4).toFixed(1)}" text-anchor="${Math.abs(l[0]-cx)<8?'middle':l[0]>cx?'start':'end'}" style="fill:#b3bdd3;font-size:11.5px">${a[0]}</text>`});
+ const poly=(S,c,fo,sw,dash)=>`<polygon points="${S.map((a,i)=>pt(i,a[1]??0).map(v=>v.toFixed(1)).join(',')).join(' ')}" fill="${c}" fill-opacity="${fo}" stroke="${c}" stroke-width="${sw}" stroke-linejoin="round"${dash?' stroke-dasharray="5 4"':''}/>`;
+ s+=poly(B,'#8f80ee',.10,1.6,true)+`<g class="rd">`+poly(A,'#22d3c5',.22,2.4)+`</g>`;
+ A.forEach((a,i)=>{if(a[1]==null)return;const p=pt(i,a[1]),b=B[i][1];s+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4.5" fill="#22d3c5" class="pt"/><circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="13" fill="transparent"${tipA(`<b>${a[0]}</b><br>Agora: ${Math.round(a[1])}/100${b!=null?`<br>12 semanas atrás: ${Math.round(b)}/100`:''}`)}/>`});
+ return`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Radar de perfil" style="max-width:420px;margin:0 auto">${s}</svg>`}
+
+/* ridgeline: distribuição de ritmo por tipo de treino */
+const CWH=()=>innerWidth<700?440:600;
+function ridgeline(){const N=NOW(),cats=['Rodagem','Longo','Limiar/Ritmo','Intervalado','Prova'],L=win(N-364*DAY,N).filter(a=>a.ty==='R'&&a.pace>180&&a.pace<480),w=CWH(),lm=100,rm=16,rh=58,ov=34,h=cats.length*rh+ov+30,x0=200,x1=420,X=v=>lm+(v-x0)/(x1-x0)*(w-lm-rm);
+ const kde=(v,bw=7)=>{const o=[];for(let t=x0;t<=x1;t+=2){let d=0;v.forEach(p=>d+=Math.exp(-.5*((t-p)/bw)**2));o.push([t,d])}return o};
+ let s='',defs='',any=false;[210,240,270,300,330,360,390].forEach(t=>s+=`<line x1="${X(t)}" x2="${X(t)}" y1="6" y2="${h-22}" stroke="#1d2640"/><text x="${X(t)}" y="${h-6}" text-anchor="middle">${fmtP(t)}</text>`);
+ cats.forEach((c,k)=>{const v=L.filter(a=>a.cat===c).map(a=>a.pace);if(v.length<4)return;any=true;const K=kde(v),mx=Math.max(...K.map(p=>p[1])),base=ov+k*rh+rh*.6,id=gid(),col=CATC[c];
+  const P=K.map(p=>[X(p[0]),base-p[1]/mx*(rh+ov*.55)]);defs+=gradV(id,col,.8,.12);const d=mono(P),med=median(v);
+  s+=`<path d="${d}L${P[P.length-1][0].toFixed(1)} ${base}L${P[0][0].toFixed(1)} ${base}Z" fill="url(#${id})" stroke="${col}" stroke-width="1.6"/><line x1="${X(med)}" x2="${X(med)}" y1="${base-rh*.55}" y2="${base}" stroke="#fff" stroke-opacity=".8"/>
+  <text x="${lm-10}" y="${base-2}" text-anchor="end" style="fill:#d6deef;font-size:11.5px">${c}</text><text x="${lm-10}" y="${base+10}" text-anchor="end" style="font-size:10px">${v.length} treinos</text>
+  <rect class="hit" x="${lm}" y="${base-rh}" width="${w-lm-rm}" height="${rh}"${tipA(`<b>${c}</b><br>${v.length} treinos em 12 meses<br>Ritmo mediano ${fmtP(med)}/km<br>Mais rápido ${fmtP(Math.min(...v))} · mais lento ${fmtP(Math.max(...v))}`)}/>`});
+ return any?`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Distribuição de ritmo por tipo"><defs>${defs}</defs>${s}</svg>`:noData}
+
+/* fluxo de zonas por mês (área suave 100%) */
+function zoneFlow(){const N=NOW(),ms=[];const d0=new Date(N);for(let i=13;i>=0;i--){const d=new Date(Date.UTC(d0.getUTCFullYear(),d0.getUTCMonth()-i,1));ms.push(d.toISOString().slice(0,7))}
+ const Z=ms.map(k=>{const z=[0,0,0,0,0];ACTS.filter(a=>a.d.slice(0,7)===k).forEach(a=>zoneSec(a).forEach((s,j)=>z[j]+=s));const t=sum(z);return t>3600?z.map(v=>v/t*100):null});
+ if(Z.filter(Boolean).length<4)return noData;
+ const w=CWH(),h=270,F=frame(w,h,{l:40,r:14,t:10,b:26}),xs=ms.map((_,i)=>F.m.l+i/(ms.length-1)*F.iw),y=v=>F.m.t+F.ih-v/100*F.ih;
+ let s='',defs='';[0,25,50,75,100].forEach(v=>s+=`<line x1="${F.m.l}" x2="${w-F.m.r}" y1="${y(v)}" y2="${y(v)}" stroke="#232d45"/><text x="${F.m.l-7}" y="${y(v)+3.5}" text-anchor="end">${v}%</text>`);
+ const idx=Z.map((z,i)=>z?i:null).filter(v=>v!=null),acc=idx.map(()=>0),zn=['Z1 muito leve','Z2 leve','Z3 moderada','Z4 forte','Z5 máxima'];
+ for(let k=0;k<5;k++){const lo=idx.map((_,j)=>acc[j]),hi=idx.map((i,j)=>acc[j]+Z[i][k]);
+  const top=idx.map((i,j)=>[xs[i],y(hi[j])]),bot=idx.map((i,j)=>[xs[i],y(lo[j])]).reverse(),id=gid();defs+=gradV(id,ZC[k],.9,.55);
+  s+=`<path d="${mono(top)}L${bot[0][0].toFixed(1)} ${bot[0][1].toFixed(1)}${mono(bot).replace(/^M[^C]*/,'')}Z" fill="url(#${id})" stroke="#131a2c" stroke-width="1.2"/>`;idx.forEach((_,j)=>acc[j]=hi[j])}
+ ms.forEach((k,i)=>{if(i%2===0)s+=`<text x="${xs[i].toFixed(1)}" y="${h-8}" text-anchor="middle">${MES[+k.slice(5)-1]}/${k.slice(2,4)}</text>`;
+  if(Z[i]){const a=i?(xs[i-1]+xs[i])/2:F.m.l,b=i<ms.length-1?(xs[i]+xs[i+1])/2:w-F.m.r;s+=`<rect class="hit" x="${a.toFixed(1)}" y="${F.m.t}" width="${(b-a).toFixed(1)}" height="${F.ih}"${tipA(`<b>${MES[+k.slice(5)-1]}/${k.slice(2,4)}</b><br>${Z[i].map((v,j)=>zn[j]+': '+f1(v,0)+'%').join('<br>')}`)}/>`}});
+ return`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Zonas de FC por mês"><defs>${defs}</defs>${s}</svg>`+legend(zn.map((n,i)=>[n,ZC[i]]))}
+
+/* relógio de 24 h (barras radiais) e mapa dia × hora */
+function hourData(){const N=NOW(),L=win(N-364*DAY,N).filter(a=>a.ty==='R'&&a.t),H=Array(24).fill(0),G=Array.from({length:7},()=>Array(24).fill(0));
+ L.forEach(a=>{const h=+a.t.slice(0,2),d=(new Date(a.ms).getUTCDay()+6)%7;if(isFinite(h)){H[h]++;G[d][h]++}});return{H,G,n:L.length}}
+function clock24(){const{H,n}=hourData();if(n<5)return noData;const w=380,h=330,cx=190,cy=165,r0=58,r1=142,mx=Math.max(...H,1);let s='',defs=gradV('cg','#22d3c5',1,.5);
+ [.33,.66,1].forEach(g=>s+=`<circle cx="${cx}" cy="${cy}" r="${(r0+(r1-r0)*g).toFixed(1)}" fill="none" stroke="#1f2945"/>`);
+ H.forEach((v,i)=>{const a0=(i-.5)/24*2*Math.PI-Math.PI/2+.02,a1=(i+.5)/24*2*Math.PI-Math.PI/2-.02,rr=r0+(r1-r0)*v/mx,p=(a,r)=>[cx+Math.cos(a)*r,cy+Math.sin(a)*r];
+  const A=p(a0,r0),B=p(a0,rr),Cc=p(a1,rr),D=p(a1,r0),col=i>=5&&i<=11?'#fab219':i>=12&&i<=17?'#e06a30':i>=18&&i<=21?'#4c8dff':'#8f80ee';
+  if(v>0)s+=`<path d="M${A[0].toFixed(1)} ${A[1].toFixed(1)}L${B[0].toFixed(1)} ${B[1].toFixed(1)}A${rr.toFixed(1)} ${rr.toFixed(1)} 0 0 1 ${Cc[0].toFixed(1)} ${Cc[1].toFixed(1)}L${D[0].toFixed(1)} ${D[1].toFixed(1)}A${r0} ${r0} 0 0 0 ${A[0].toFixed(1)} ${A[1].toFixed(1)}Z" fill="${col}" fill-opacity=".85"/>`;
+  s+=`<path d="M${A[0].toFixed(1)} ${A[1].toFixed(1)}L${p(a0,r1)[0].toFixed(1)} ${p(a0,r1)[1].toFixed(1)}A${r1} ${r1} 0 0 1 ${p(a1,r1)[0].toFixed(1)} ${p(a1,r1)[1].toFixed(1)}L${D[0].toFixed(1)} ${D[1].toFixed(1)}Z" fill="transparent" class="hit"${tipA(`<b>${String(i).padStart(2,'0')}h</b><br>${v} treino${v===1?'':'s'} nos últimos 12 meses`)}/>`});
+ [0,6,12,18].forEach(hr=>{const a=hr/24*2*Math.PI-Math.PI/2,p=[cx+Math.cos(a)*(r1+16),cy+Math.sin(a)*(r1+16)];s+=`<text x="${p[0].toFixed(1)}" y="${(p[1]+4).toFixed(1)}" text-anchor="middle" style="fill:#b3bdd3;font-size:11.5px">${hr}h</text>`});
+ const top=H.indexOf(mx);s+=`<text x="${cx}" y="${cy+4}" text-anchor="middle" style="fill:#fff;font-size:24px;font-weight:700">${String(top).padStart(2,'0')}h</text><text x="${cx}" y="${cy+20}" text-anchor="middle" style="font-size:10px">mais comum</text>`;
+ return`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Horário dos treinos" style="max-width:400px;margin:0 auto"><defs>${defs}</defs>${s}</svg>`}
+function dayHour(){const{G,n}=hourData();if(n<5)return noData;const w=CWH(),H0=4,NH=20,lm=34,top=18,cell=(w-lm-8)/NH,gh=cell*.92,mx=Math.max(...G.flat(),1),D=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'],h=top+7*(gh+2)+18;let s='';
+ for(let hr=H0;hr<24;hr+=2)s+=`<text x="${lm+(hr-H0)*cell+cell/2}" y="11" text-anchor="middle">${hr}h</text>`;
+ D.forEach((d,i)=>{s+=`<text x="0" y="${top+i*(gh+2)+gh*.7}">${d}</text>`;for(let hr=H0;hr<24;hr++){const v=G[i][hr],t=v/mx,c=v?`rgba(34,211,197,${(.18+.82*t).toFixed(2)})`:'rgba(255,255,255,.04)';
+  s+=`<rect class="hc" x="${(lm+(hr-H0)*cell+1).toFixed(1)}" y="${(top+i*(gh+2)).toFixed(1)}" width="${(cell-2).toFixed(1)}" height="${gh.toFixed(1)}" rx="4" fill="${c}"${tipA(`<b>${d}, ${String(hr).padStart(2,'0')}h</b><br>${v} treino${v===1?'':'s'}`)}/>`}});
+ return`<svg viewBox="0 0 ${w} ${h.toFixed(0)}" role="img" aria-label="Dia da semana e hora">${s}</svg>`}
+
+/* km acumulado: este ano × anos anteriores */
+function ytd(){const N=NOW(),Y=new Date(N).getUTCFullYear(),doy=ms=>Math.floor((ms-Date.UTC(new Date(ms).getUTCFullYear(),0,1))/DAY)+1,xs=Array.from({length:365},(_,i)=>i+1),today=doy(N);
+ const yrs=[Y,Y-1,Y-2].filter(y=>ACTS.some(a=>new Date(a.ms).getUTCFullYear()===y)),cols=['#22d3c5','#8f80ee','#66748f'],series=yrs.map((y,k)=>{const d=Array(366).fill(0);ACTS.filter(a=>new Date(a.ms).getUTCFullYear()===y).forEach(a=>d[Math.min(365,doy(a.ms))]+=a.km);let c=0;
+  return{n:String(y),c:cols[k],sw:k?1.8:3,nodots:true,area:k===0,dash:k===2,vals:xs.map(i=>{c+=d[i];return y===Y&&i>today?null:c})}});
+ if(!series.length)return noData;const tot=y=>{const s=series.find(z=>z.n===String(y));return s?Math.max(...s.vals.filter(v=>v!=null)):null};
+ const ch=lineChart({xs,series,w:CWH(),endLabels:true,yfmt:v=>Math.round(v),xfmt:v=>MES[Math.min(11,Math.floor((v-1)/30.5))],xk:11,tip:i=>`<b>Dia ${i+1} do ano</b><br>${series.map(s=>`${s.n}: ${s.vals[i]==null?'—':f1(s.vals[i],0)+' km'}`).join('<br>')}`,h:260});
+ const at=y=>{const s=series.find(z=>z.n===String(y));return s?s.vals[Math.min(364,today-1)]:null};
+ return{ch,cur:at(Y),prev:at(Y-1),Y}}
+
+/* recordes pessoais */
+function records(){const R=ACTS.filter(a=>isRaceAct(a)&&a.km>=4.5),def=[['5 km',4.8,5.4],['10 km',9.5,10.4],['Meia maratona',20.5,21.7],['Maratona',41,43]];
+ return def.map(([n,lo,hi],i)=>{const g=R.filter(a=>a.km>=lo&&a.km<=hi).sort((a,b)=>a.sec-b.sec)[0];return g?`<div class="card pr"><span class="medal">${['5K','10K','21K','42K'][i]}</span><b>${fmtT(g.sec)}</b><i>${fmtP(g.sec/g.km)}/km · ${fmtD(g.ms)}</i></div>`:''}).join('')}
+
+function pgPano(){const N=NOW(),ix=scoreIndex(),y=new Date(N).getUTCFullYear(),Ly=win(Date.UTC(y,0,1),N),m0=N-27*DAY,k28=sum(win(m0,N).map(a=>a.km)),kp=sum(win(N-83*DAY,N-28*DAY).map(a=>a.km))/2||1;
+ const L=loadSeries(),ctl=L.ctl[L.ctl.length-1],pk=Math.max(...L.ctl.slice(-365)),sl=REC.r.filter(r=>r.ms>=N-6*DAY).map(r=>r.sl).filter(v=>v!=null),vf=REC.k&&REC.k.vfc7,vb=median(REC.r.filter(r=>r.vfc!=null).slice(-90).map(r=>r.vfc));
+ const g=[gauge({v:ix.total,val:Math.round(ix.total),sub:'de 100',label:'Índice geral',c1:'#22d3c5',c2:'#8f80ee'}),
+  gauge({v:k28/kp*100,max:130,val:f1(k28,0),sub:'km · 28 dias',label:k28>=kp?`${f1((k28/kp-1)*100,0)}% acima da média`:`${f1((1-k28/kp)*100,0)}% abaixo da média`,c1:'#4c8dff',c2:'#8f80ee'}),
+  gauge({v:ctl/pk*100,val:f1(ctl,0),sub:'forma (CTL)',label:`${f1(ctl/pk*100,0)}% do seu pico em 12 meses`,c1:'#22d3c5',c2:'#4c8dff'}),
+  sl.length?gauge({v:mean(sl),val:f1(mean(sl),0),sub:'score de sono',label:vf&&vb?`VFC ${f1(vf,0)} ms (base ${f1(vb,0)})`:'últimos 7 dias',c1:'#8f80ee',c2:'#d9588f'}):''].join('');
+ const hc=heatCal(),yy=ytd();
+ const hero=`<div class="card pano"><div><h3>Panorama de ${y}</h3><p>${Ly.length} corridas · ${f1(sum(Ly.map(a=>a.km)),0)} km · ${f1(sum(Ly.map(a=>a.sec))/3600,0)} h de treino</p></div><div class="chips"><span class="chip"><b>${f1(sum(win(N-6*DAY,N).map(a=>a.km)),0)}</b> km na semana</span><span class="chip"><b>${f1(k28,0)}</b> km em 28 dias</span><span class="chip"><b>${new Set(win(N-27*DAY,N).map(a=>a.d)).size}</b> dias com treino</span></div></div>`;
+ const pr=records();
+ return hero+`<div class="grid gg mt">${g}</div>`+(pr?sech('Recordes em prova')+`<div class="grid kpis" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr))">${pr}</div>`:'')
+  +sech(innerWidth<700?'Constância: 27 semanas':'Constância: 53 semanas')+card('Calendário de treinos',`${hc.days} dias com treino no período · ${f1(hc.tot,0)} km no total`,hc.svg,hc.lg)
+  +sech('Forma, fadiga e equilíbrio')+card('Gráfico de gestão de desempenho','Azul = forma (42 dias) · laranja = fadiga (7 dias) · bandeiras = provas. Embaixo, o equilíbrio por zonas: verde-claro é o ponto de "fresco para correr bem".',pmc(),legend([['Forma (CTL)','#4c8dff'],['Fadiga (ATL)','#e06a30'],['Equilíbrio (TSB)','#22d3c5']]))
+  +sech('Perfil e ritmo')+`<div class="grid g2">${card('Radar de perfil','Verde = agora · tracejado = 12 semanas atrás. Cada eixo vai de 0 a 100 contra o seu melhor do ano.',radar(),legend([['Agora','#22d3c5'],['12 semanas atrás','#8f80ee']]))}${card('Distribuição de ritmo por tipo','Cada montanha mostra onde caem os ritmos daquele tipo de treino (12 meses). Linha branca = mediana.',ridgeline())}</div>`
+  +sech('Ano contra ano')+`<div class="grid g2">${card('Quilômetros acumulados',yy.cur!=null&&yy.prev!=null?`${yy.Y}: ${f1(yy.cur,0)} km · ${yy.Y-1} no mesmo dia: ${f1(yy.prev,0)} km`:'Acumulado ao longo do ano',yy.ch||noData)}${card('Intensidade mês a mês','Fatia do tempo de cada mês em cada zona de FC.',zoneFlow())}</div>`
+  +sech('Rotina')+`<div class="grid g2">${card('Relógio de treino','Quantos treinos começaram em cada hora (12 meses). Amarelo = manhã · laranja = tarde · azul = noite.',clock24())}${card('Dia da semana × hora','Onde a sua rotina realmente acontece.',dayHour())}</div>`}
+
 /* ============ navegação e render ============ */
 const PAGES=[
+ ['pano','Panorama','Visão geral em gráficos',pgPano,0,'<path d="M3 20V8l5 4 4-8 4 6 5-4v14z"/>'],
  ['resumo','Resumo','Como você está hoje',pgResumo,0,'<path d="M4 13a8 8 0 1 1 16 0"/><path d="M12 13l4-5"/><path d="M5 19h14"/>'],
  ['comparativos','Comparativos','Um período contra o outro',pgComparativos,0,'<path d="M7 4v16M7 4L3 8M7 4l4 4"/><path d="M17 20V4m0 16l4-4m-4 4l-4-4"/>'],
  ['meta','Meta e projeção','Quanto falta e o que mudar',pgMeta,0,'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>'],
