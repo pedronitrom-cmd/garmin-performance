@@ -230,7 +230,7 @@ const pill=(k,extra='')=>`<span class="pill"><i style="background:${CATC[k]||NEU
 
 /* ============ dados ============ */
 let ACTS=[],REC={m:[],r:[],k:{}},SRC='Garmin Connect (sync automático)';
-const S={page:'pano',range:'12m',hrmax:190,hrrest:45,cat:'',q:'',sort:'ms',desc:true,all:false,cmp:'28d',race:'',xrace:'',dpw:5,goal:{d:'10k',t:'38:30',date:''}};
+const S={page:'ultimo',lt:'',range:'12m',hrmax:190,hrrest:45,cat:'',q:'',sort:'ms',desc:true,all:false,cmp:'28d',race:'',xrace:'',dpw:5,goal:{d:'10k',t:'38:30',date:''}};
 
 function classify(a){const t=norm(a.title);
  if(/simulador/.test(t))return'Limiar/Ritmo';
@@ -1073,8 +1073,92 @@ function pgPano(){const N=NOW(),ix=scoreIndex(),y=new Date(N).getUTCFullYear(),L
   +sech('Ano contra ano')+`<div class="grid g2">${card('Quilômetros acumulados',yy.cur!=null&&yy.prev!=null?`${yy.Y}: ${f1(yy.cur,0)} km · ${yy.Y-1} no mesmo dia: ${f1(yy.prev,0)} km`:'Acumulado ao longo do ano',yy.ch||noData)}${card('Intensidade mês a mês','Fatia do tempo de cada mês em cada zona de FC.',zoneFlow())}</div>`
   +sech('Rotina')+`<div class="grid g2">${card('Relógio de treino','Quantos treinos começaram em cada hora (12 meses). Amarelo = manhã · laranja = tarde · azul = noite.',clock24())}${card('Dia da semana × hora','Onde a sua rotina realmente acontece.',dayHour())}</div>`}
 
+/* ============ Último treino: análise e comparação ============ */
+const WDN=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+const akey=a=>a.d+'|'+a.t+'|'+a.title;
+function refFor(cur){const wd=new Date(cur.ms).getUTCDay(),c=ACTS.filter(a=>a!==cur&&a.ms<cur.ms&&a.ms>=cur.ms-28*DAY&&new Date(a.ms).getUTCDay()===wd);
+ if(!c.length)return null;c.sort((a,b)=>b.ms-a.ms||Math.abs(a.km-cur.km)-Math.abs(b.km-cur.km));const top=c.filter(a=>a.ms===c[0].ms).sort((a,b)=>Math.abs(a.km-cur.km)-Math.abs(b.km-cur.km))[0];return top}
+function similarOf(cur){return ACTS.filter(a=>a!==cur&&a.ms<cur.ms&&a.ms>=cur.ms-150*DAY&&a.cat===cur.cat&&a.ty===cur.ty&&Math.abs(a.km-cur.km)/cur.km<=.3).slice(0,14)}
+const zp=a=>{const z=zoneSec(a),t=sum(z);return t?z.map(v=>v/t*100):null};
+function pgLast(){
+ if(!ACTS.length)return'<p class="note">Sem treinos.</p>';
+ const opts=ACTS.slice(0,30);let cur=opts.find(a=>akey(a)===S.lt)||opts[0];S.lt=akey(cur);
+ const sel=`<div class="ctl" style="margin-bottom:14px"><span>Treino:</span><select data-sx="lt" style="max-width:100%">${opts.map((a,i)=>`<option value="${esc(akey(a))}"${a===cur?' selected':''}>${i===0?'Último · ':''}${fmtD(a.ms)} ${a.t} · ${esc(a.title)} · ${f1(a.km,1)} km</option>`).join('')}</select></div>`;
+ const ref=refFor(cur),sim=similarOf(cur),wd=WDN[new Date(cur.ms).getUTCDay()],refL=ref?`${wd} anterior`+(cur.ms-ref.ms!==7*DAY?` (${fmtDM(ref.ms)})`:` (${fmtDM(ref.ms)})`):'';
+ const xc=execStats(cur),xrf=ref?execStats(ref):null,ec=cur.hr>0?EF(cur):null,er=ref&&ref.hr>0?EF(ref):null,tc=trimp(cur),tr=ref?trimp(ref):null,zc=zp(cur),zr=ref?zp(ref):null;
+ const sc=splitOf(cur),sr=ref?splitOf(ref):null,cx=cur.x||{},rx=ref&&ref.x?ref.x:{};
+ /* cabeçalho */
+ const pr=ref?`<span class="chip">vs <b>${refL}</b>: ${esc(ref.title)} · ${f1(ref.km,1)} km</span>`:`<span class="chip">Sem treino na mesma ${wd} nas últimas 4 semanas</span>`;
+ const hero=`<div class="card pano"><div><h3>${esc(cur.title)}</h3><p>${wd[0].toUpperCase()+wd.slice(1)}, ${fmtD(cur.ms)} às ${cur.t} · ${pill(cur.cat)}</p></div><div class="chips">${pr}</div></div>`;
+ /* KPIs */
+ const k=(l,v,sub,d)=>kpiCard(l,v,sub,d||'');
+ const kp=`<div class="grid kpis mt">${k('Distância',f1(cur.km,2)+' <small>km</small>',ref?'anterior '+f1(ref.km,2)+' km':'',ref?delta(cur.km,ref.km,{mode:'abs',dec:1,unit:' km'}):'')}${k('Tempo',fmtT(cur.sec),ref?'anterior '+fmtT(ref.sec):'')}${k('Ritmo médio',fmtP(cur.pace)+' <small>/km</small>',ref?'anterior '+fmtP(ref.pace):'',ref?delta(cur.pace,ref.pace,{mode:'pace',dir:-1}):'')}${k('FC média',f1(cur.hr,0)+' <small>bpm</small>',cur.hrmax?'máx '+f1(cur.hrmax,0):'',ref?delta(cur.hr,ref.hr,{mode:'abs',dec:0,unit:' bpm',dir:0,tol:1.5}):'')}${k('Eficiência (EF)',ec?f1(ec,3):'—',er?'anterior '+f1(er,3):'maior = mais rápido por batida',ec&&er?delta(ec,er,{dir:1,tol:1}):'')}${k('Carga (TRIMP)',f1(tc,0),tr!=null?'anterior '+f1(tr,0):'',tr!=null?delta(tc,tr,{dir:0,tol:3}):'')}</div>`;
+ /* gráficos km a km */
+ let paceC='',hrC='';
+ if(xc){const n=Math.max(xc.p.length,xrf?xrf.p.length:0),xs=Array.from({length:n},(_,i)=>i+1),vc=xs.map((_,i)=>xc.p[i]!=null?-xc.p[i]:null),vr=xrf?xs.map((_,i)=>xrf.p[i]!=null?-xrf.p[i]:null):null,
+  hc=xs.map((_,i)=>xc.h[i]!=null?xc.h[i]:null),hr_=xrf?xs.map((_,i)=>xrf.h[i]!=null?xrf.h[i]:null):null,tipP=i=>`<b>Km ${i+1}</b><br>Este treino: ${xc.p[i]!=null?fmtP(xc.p[i])+'/km':'—'}${xrf?`<br>${wd} anterior: ${xrf.p[i]!=null?fmtP(xrf.p[i])+'/km':'—'}`:''}`,tipH=i=>`<b>Km ${i+1}</b><br>Este treino: ${xc.h[i]??'—'} bpm${xrf?`<br>${wd} anterior: ${xrf.h[i]??'—'} bpm`:''}`;
+  const sp=[{n:'Este treino',c:C[0],vals:vc,area:true,sw:2.8}];if(vr)sp.push({n:'Anterior',c:NEU,vals:vr,dash:true,sw:2});
+  paceC=lineChart({xs,series:sp,w:CWH(),yfmt:v=>fmtP(-v),xfmt:v=>'km '+Math.round(v),xk:Math.min(n-1,9),tip:tipP,h:240,refs:[{v:-xc.avg,t:'média',c:C[0]}]});
+  const sh=[{n:'Este treino',c:C[1],vals:hc,sw:2.8}];if(hr_)sh.push({n:'Anterior',c:NEU,vals:hr_,dash:true,sw:2});
+  hrC=lineChart({xs,series:sh,w:CWH(),yfmt:v=>f1(v,0),xfmt:v=>'km '+Math.round(v),xk:Math.min(n-1,9),tip:tipH,h:240})}
+ const lg=legend([['Este treino',C[0]]].concat(xrf?[['Anterior',NEU]]:[]));
+ const sec1=sech('Ritmo e frequência cardíaca km a km')+`<div class="grid g2">${card('Ritmo por km','Mais alto = mais rápido. Tracejado = '+(ref?refL:'sem referência'),paceC||noData,lg)}${card('FC por km','Batimentos médios de cada parcial',hrC||noData,lg)}</div>`;
+ /* tabela comparativa */
+ const rows=[];const R=(l,c,r,fm,o={})=>{if(c==null)return;rows.push(`<tr><td class="l">${l}</td><td>${fm(c)}</td><td>${r!=null?fm(r):'—'}</td><td>${ref&&r!=null?delta(c,r,o):'—'}</td></tr>`)};
+ R('Distância',cur.km,ref?ref.km:null,v=>f1(v,2)+' km',{mode:'abs',dec:2,unit:' km',tol:.05});
+ R('Tempo',cur.sec,ref?ref.sec:null,fmtT,{mode:'abs',dec:0,unit:' s',tol:5});
+ R('Ritmo médio',cur.pace,ref?ref.pace:null,v=>fmtP(v)+'/km',{mode:'pace',dir:-1});
+ if(xc){R('Melhor km',Math.min(...xc.p),xrf?Math.min(...xrf.p):null,v=>fmtP(v),{mode:'pace',dir:-1});R('Pior km',xc.worst,xrf?xrf.worst:null,v=>fmtP(v),{mode:'pace',dir:-1});R('Variação entre km',xc.cv,xrf?xrf.cv:null,v=>f1(v)+'%',{mode:'abs',dec:1,unit:' pp',dir:-1,tol:.3});R('1º km vs média',xc.k1,xrf?xrf.k1:null,v=>(v>=0?'+':'−')+Math.abs(Math.round(v))+' s',{mode:'abs',dec:0,unit:' s',tol:2});R('Final (2 últimos km)',xc.fin,xrf?xrf.fin:null,v=>(v>=0?'+':'−')+Math.abs(Math.round(v))+' s',{mode:'abs',dec:0,unit:' s',tol:2})}
+ if(sc)R('2ª metade vs 1ª',sc.fade,sr?sr.fade:null,v=>(v>=0?'+':'')+f1(v)+'%',{mode:'abs',dec:1,unit:' pp',dir:-1,tol:.4});
+ R('FC média',cur.hr,ref?ref.hr:null,v=>f1(v,0)+' bpm',{mode:'abs',dec:0,unit:' bpm',tol:1.5});R('FC máxima',cur.hrmax,ref?ref.hrmax:null,v=>f1(v,0)+' bpm',{mode:'abs',dec:0,unit:' bpm',tol:2});
+ R('Eficiência (EF)',ec,er,v=>f1(v,3),{dir:1,tol:1});R('Carga (TRIMP)',tc,tr,v=>f1(v,0),{tol:3});
+ if(zc){R('Tempo em Z1+Z2',zc[0]+zc[1],zr?zr[0]+zr[1]:null,v=>f1(v,0)+'%',{mode:'abs',dec:0,unit:' pp',tol:3});R('Tempo em Z4+Z5',zc[3]+zc[4],zr?zr[3]+zr[4]:null,v=>f1(v,0)+'%',{mode:'abs',dec:0,unit:' pp',tol:3})}
+ [['cad','Cadência',v=>f1(v,0)+' spm',0],['stride','Passada',v=>f1(v,0)+' cm',0],['gct','Contato com o solo',v=>f1(v,0)+' ms',-1],['vo','Oscilação vertical',v=>f1(v,1)+' cm',-1],['pw','Potência',v=>f1(v,0)+' W',0],['up','Subida',v=>f1(v,0)+' m',0],['tp','Temperatura',v=>f1(v,0)+' °C',0],['gap','Ritmo ajustado (GAP)',v=>fmtP(v)+'/km',-1],['ld','Carga Garmin',v=>f1(v,0),0],['te','Efeito aeróbico',v=>f1(v,1),0]].forEach(([key,n,fm,dir])=>{if(cx[key]!=null)R(n,cx[key],rx[key],fm,key==='gap'?{mode:'pace',dir:-1}:{mode:'abs',dec:key==='vo'||key==='te'?1:0,unit:'',dir,tol:key==='vo'?.15:key==='te'?.2:1})});
+ const tbl=card('Métrica por métrica',ref?`Hoje contra ${refL}: ${esc(ref.title)}.`:'Sem treino na mesma semana para comparar.',`<div class="sc" style="max-height:none"><table><thead><tr><th class="l">Métrica</th><th>Este treino</th><th>${ref?'Anterior':'—'}</th><th>Diferença</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`);
+ /* zonas */
+ const zn=['Z1','Z2','Z3','Z4','Z5'],zb=(z,l)=>z?`<div class="cr" style="grid-template-columns:82px 1fr"><b style="font-size:12.5px;text-align:left;min-width:0">${l}</b><div class="bar1">${z.map((v,i)=>v>=1.5?`<div style="flex:${v};background:${ZC[i]}"${tipA(zn[i]+': '+f1(v,0)+'%')}>${v>=8?Math.round(v)+'%':''}</div>`:'').join('')}</div></div>`:'';
+ const zcard=card('Zonas de frequência cardíaca','Quanto do treino foi passado em cada zona.',zb(zc,'Hoje')+zb(zr,'Anterior')+legend(zn.map((n,i)=>[n,ZC[i]])));
+ /* parecidos */
+ const simT=sim.length>=3?(()=>{const arr=[cur,...sim],rkP=[...arr].sort((a,b)=>a.pace-b.pace).indexOf(cur)+1,ef_=[...arr].filter(a=>a.hr>0).sort((a,b)=>EF(b)-EF(a)),rkE=ef_.indexOf(cur)+1;
+  const tr_=arr.slice(0,9).map(a=>`<tr${a===cur?' style="background:rgba(76,141,255,.10)"':''}><td class="l">${fmtD(a.ms)}</td><td>${f1(a.km,1)}</td><td>${fmtP(a.pace)}</td><td>${f1(a.hr,0)}</td><td>${a.hr>0?f1(EF(a),3):'—'}</td></tr>`).join('');
+  return{rkP,rkE,n:arr.length,html:card(`Contra ${sim.length} treinos parecidos`,`${cur.cat}, distância ±30%, últimos 5 meses. Hoje em azul.`,`<div class="sc" style="max-height:none"><table><thead><tr><th class="l">Data</th><th>km</th><th>Ritmo</th><th>FC</th><th>EF</th></tr></thead><tbody>${tr_}</tbody></table></div>`,`<p class="note">Ritmo: <b>${rkP}º</b> mais rápido de ${arr.length}. Eficiência: <b>${rkE||'—'}º</b> de ${ef_.length}.</p>`)}})():null;
+ /* semana */
+ const W=weeklyAll(),wcur=W.find(w=>w.w===weekStart(cur.ms)),wprev=W.find(w=>w.w===weekStart(cur.ms)-7*DAY),L=loadSeries(),ix=L.xs.indexOf(cur.ms),tsbB=ix>0?L.tsb[ix-1]:null,ctlA=ix>=0?L.ctl[ix]:null;
+ const dow=(new Date(cur.ms).getUTCDay()+6)%7,pw=wprev?win(wprev.w,wprev.w+dow*DAY):[],pk=sum(pw.map(a=>a.km)),pl=sum(pw.map(trimp));
+ const wk=wcur?card('Semana do treino','Até este dia, contra o mesmo ponto da semana anterior.',`<div class="grid kpis" style="grid-template-columns:1fr 1fr">${kpiCard('Km na semana',f1(sum(win(wcur.w,cur.ms).map(a=>a.km)),1),'semana anterior até o mesmo dia: '+f1(pk,1),delta(sum(win(wcur.w,cur.ms).map(a=>a.km)),pk,{dir:0,tol:3}))}${kpiCard('Carga na semana',f1(sum(win(wcur.w,cur.ms).map(trimp)),0),'semana anterior: '+f1(pl,0),delta(sum(win(wcur.w,cur.ms).map(trimp)),pl,{dir:0,tol:3}))}${kpiCard('Equilíbrio antes (TSB)',tsbB!=null?(tsbB>=0?'+':'')+f1(tsbB,0):'—',tsbB==null?'':tsbB>5?'chegou descansado':tsbB<-20?'chegou com fadiga alta':'chegou neutro')}${kpiCard('Forma (CTL) depois',ctlA!=null?f1(ctlA,0):'—','base de 42 dias')}</div>`):'';
+ /* insights */
+ const ev=[],add=(sev,tag,title,text)=>ev.push({sev,tag,title,text}),ic={ok:'✓',warn:'▲',bad:'✕',info:'●'};
+ if(ref&&(ref.cat!==cur.cat||Math.abs(ref.km-cur.km)/cur.km>.35))add('warn','comparação limitada','Treinos de natureza diferente',`O treino da ${wd} anterior foi ${ref.cat.toLowerCase()} de ${f1(ref.km,1)} km; este foi ${cur.cat.toLowerCase()} de ${f1(cur.km,1)} km. Ritmo, FC e zonas não são diretamente comparáveis. Para uma leitura justa, veja a seção 'Contra treinos parecidos'.`);
+ if(ref){const dp=cur.pace-ref.pace,dh=cur.hr-ref.hr,de=ec&&er?(ec/er-1)*100:null;
+  const t=Math.abs(dp)<1.5?'Ritmo praticamente igual':dp<0?`${Math.round(-dp)} s/km mais rápido`:`${Math.round(dp)} s/km mais lento`;
+  const hrT=Math.abs(dh)<1.5?'com a mesma FC':dh<0?`com FC ${Math.round(-dh)} bpm menor`:`com FC ${Math.round(dh)} bpm maior`;
+  let sev='info',txt=`${t} que na ${wd} anterior, ${hrT}.`;
+  if(de!=null){if(de>=2){sev='ok';txt+=` A eficiência subiu ${f1(de)}%: você fez mais por batida.`}else if(de<=-2){sev='warn';txt+=` A eficiência caiu ${f1(-de)}%: o mesmo esforço rendeu menos. Calor, sono ou fadiga acumulada costumam ser os suspeitos.`}else txt+=' Eficiência estável.'}
+  add(sev,de!=null?(de>=0?'+':'')+f1(de)+'% EF':'',`Contra a ${wd} anterior`,txt)}
+ if(sc&&cur.km>=5){add(sc.fade<=2?'ok':sc.fade<=5?'warn':'bad',(sc.fade>=0?'+':'')+f1(sc.fade)+'%','Execução',`${sc.fade<=-1?'Segunda metade mais rápida (negative split): execução ideal.':sc.fade<=2?'Ritmo bem distribuído do começo ao fim.':sc.fade<=5?'Você desacelerou na segunda metade. Comece 3 a 5 s/km mais conservador.':'Desaceleração forte: largou rápido demais ou faltou resistência para essa distância.'}${xc?` O pior km foi o ${xc.wi}º, a ${fmtP(xc.worst)}.`:''}`)}
+ if(xc&&xrf&&cur.km>=5)add(xc.cv<xrf.cv-.3?'ok':xc.cv>xrf.cv+.5?'warn':'info',f1(xc.cv)+'%','Regularidade',`Variação entre km de ${f1(xc.cv)}% contra ${f1(xrf.cv)}% no treino anterior. ${xc.cv<xrf.cv-.3?'Ritmo mais uniforme.':xc.cv>xrf.cv+.5?'Ritmo mais irregular; em treino fácil isso costuma ser terreno ou paradas.':'Parecido.'}`);
+ if(zc){const hi=zc[2]+zc[3]+zc[4],easyCat=['Rodagem','Leve','Longo'].includes(cur.cat),hardCat=['Intervalado','Limiar/Ritmo','Prova'].includes(cur.cat);
+  if(easyCat)add(hi<=20?'ok':hi<=35?'warn':'bad',f1(hi,0)+'% acima de Z2','Intensidade do treino fácil',hi<=20?'Treino fácil de verdade: quase todo em zona baixa.':`Um treino fácil deveria ficar em Z1 e Z2; ${f1(hi,0)}% do tempo passou disso. Deixe o relógio mandar: reduza o ritmo até a FC cair.`);
+  if(hardCat)add((zc[3]+zc[4])>=25?'ok':'info',f1(zc[3]+zc[4],0)+'% em Z4+Z5','Estímulo do treino forte',(zc[3]+zc[4])>=25?'Bom tempo em zona forte para um treino de qualidade.':'Pouco tempo em Z4 e Z5. A FC de blocos curtos demora a subir, então o TRIMP e as zonas podem subestimar o esforço real.')}
+ if(tsbB!=null){add(tsbB>5?'ok':tsbB<-20?'warn':'info',(tsbB>=0?'+':'')+f1(tsbB,0)+' TSB','Condição de chegada',tsbB>5?'Você chegou descansado para esse treino.':tsbB<-20?'Você chegou com fadiga alta: ritmo e FC pior que o normal são esperados.':'Fadiga e forma em equilíbrio normal.')}
+ if(sim.length>=3){const m=median(sim.map(a=>a.pace)),me=sim.filter(a=>a.hr>0).length>=3?median(sim.filter(a=>a.hr>0).map(EF)):null,dp=cur.pace-m,de=ec&&me?(ec/me-1)*100:null;add(dp<-2?'ok':dp>3?'warn':'info',(dp<0?'−':'+')+Math.abs(Math.round(dp))+' s/km','Contra treinos parecidos',`Mediana dos ${sim.length} parecidos: ${fmtP(m)}/km. Hoje ${dp<-2?'foi mais rápido':dp>3?'foi mais lento':'ficou na média'}${de!=null?` e a eficiência ficou ${f1(Math.abs(de))}% ${de>=0?'acima':'abaixo'} da mediana`:''}.`)}
+ if(cx.tp!=null&&rx.tp!=null&&Math.abs(cx.tp-rx.tp)>=4)add('info',f1(cx.tp,0)+' °C','Clima',`Temperatura de ${f1(cx.tp,0)} °C contra ${f1(rx.tp,0)} °C no treino anterior. ${cx.tp>rx.tp?'O calor extra costuma custar eficiência e elevar a FC: considere isso ao comparar.':'Mais fresco ajuda a eficiência.'}`);
+ else if(cx.tp!=null&&cx.tp>=28)add('warn',f1(cx.tp,0)+' °C','Clima','Calor forte para correr. Espere FC mais alta e ritmo menor no mesmo esforço; hidrate e não force o ritmo.');
+ if(cx.cad!=null&&rx.cad!=null&&Math.abs(cx.cad-rx.cad)>=3)add('info',(cx.cad>rx.cad?'+':'')+Math.round(cx.cad-rx.cad)+' spm','Cadência',`Cadência ${Math.round(cx.cad)} spm contra ${Math.round(rx.cad)}. ${cx.gct!=null&&rx.gct!=null?`Contato com o solo ${Math.round(cx.gct)} ms contra ${Math.round(rx.gct)} ms.`:''}`);
+ if(cx.up!=null&&cx.up>=50&&cx.gap!=null)add('info',Math.round(cx.up)+' m de subida','Terreno',`Percurso com ${Math.round(cx.up)} m de subida. No plano o seu esforço equivaleria a ${fmtP(cx.gap)}/km, contra ${fmtP(cur.pace)}/km reais.`);
+ if(cx.te!=null)add(cx.te>=3?'ok':'info','TE '+f1(cx.te,1),'Efeito de treino (Garmin)',cx.te>=4?'Estímulo muito forte: dê 48 h de recuperação com treinos leves.':cx.te>=3?'Estímulo bom para melhorar a forma.':cx.te>=2?'Estímulo moderado: mantém o nível.':'Estímulo baixo: foi um treino de manutenção ou recuperação.');
+ /* próximo treino */
+ const prev=ACTS.filter(a=>a.ms<cur.ms)[0],gap=prev?Math.round((cur.ms-prev.ms)/DAY):null,hard=['Intervalado','Limiar/Ritmo','Prova'].includes(cur.cat),lon=cur.km>=16;
+ add('info','próximo','O que fazer depois',hard?'Foi um treino forte: o próximo deve ser fácil (Z1/Z2) ou folga. Só volte a um treino de qualidade em 48 a 72 horas.':lon?'Longão feito: um dia leve ou folga, e a próxima qualidade em 2 dias.':(tsbB!=null&&tsbB>5&&!win(cur.ms-3*DAY,cur.ms-DAY).some(a=>['Intervalado','Limiar/Ritmo'].includes(a.cat)))?'Você está descansado e sem treino forte nos últimos dias: bom momento para o próximo ser um treino de qualidade.':'Mantenha o fácil como fácil e reserve a intensidade para os dois dias fortes da semana.');
+ if(gap!=null&&gap>=4)add('warn',gap+' dias','Intervalo antes do treino',`Foram ${gap} dias sem treinar antes deste. Retomadas costumam ter FC mais alta no mesmo ritmo; compare com mais cuidado.`);
+ const evh=`<div class="ev">${ev.map(e=>`<div class="card ${e.sev}"><h4><span>${ic[e.sev]}</span>${e.title}<span class="badge">${e.tag}</span></h4><p>${e.text}</p></div>`).join('')}</div>`;
+ /* gráfico de parecidos no tempo */
+ let simC='';if(sim.length>=3){const arr=[cur,...sim].sort((a,b)=>a.ms-b.ms);simC=card('Ritmo nos treinos parecidos','Mais alto = mais rápido. O último ponto é o treino analisado.',lineChart({xs:arr.map(a=>a.ms),series:[{c:C[0],vals:arr.map(a=>-a.pace),sw:2.4}],yfmt:v=>fmtP(-v),xfmt:fmtDM,xk:Math.min(5,arr.length-1),w:CWH(),h:230,tip:i=>`<b>${fmtD(arr[i].ms)}</b><br>${f1(arr[i].km,1)} km · ${fmtP(arr[i].pace)}/km<br>FC ${f1(arr[i].hr,0)}`}))}
+ return sel+hero+kp+sech('Insights')+evh+sec1+sech('Comparação detalhada')+`<div class="grid g2">${tbl}<div style="display:grid;gap:14px;align-content:start">${zcard}${wk}</div></div>`+(simT?sech('Contra treinos parecidos')+`<div class="grid g2">${simT.html}${simC}</div>`:'')}
+
 /* ============ navegação e render ============ */
 const PAGES=[
+ ['ultimo','Último treino','Análise e comparação',pgLast,0,'<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/>'],
  ['pano','Panorama','Visão geral em gráficos',pgPano,0,'<path d="M3 20V8l5 4 4-8 4 6 5-4v14z"/>'],
  ['resumo','Resumo','Como você está hoje',pgResumo,0,'<path d="M4 13a8 8 0 1 1 16 0"/><path d="M12 13l4-5"/><path d="M5 19h14"/>'],
  ['comparativos','Comparativos','Um período contra o outro',pgComparativos,0,'<path d="M7 4v16M7 4L3 8M7 4l4 4"/><path d="M17 20V4m0 16l4-4m-4 4l-4-4"/>'],
