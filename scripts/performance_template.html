@@ -1084,11 +1084,13 @@ function pgLast(){
  if(!ACTS.length)return'<p class="note">Sem treinos.</p>';
  const opts=ACTS.slice(0,30);let cur=opts.find(a=>akey(a)===S.lt)||opts[0];S.lt=akey(cur);
  const sel=`<div class="ctl" style="margin-bottom:14px"><span>Treino:</span><select data-sx="lt" style="max-width:100%">${opts.map((a,i)=>`<option value="${esc(akey(a))}"${a===cur?' selected':''}>${i===0?'Último · ':''}${fmtD(a.ms)} ${a.t} · ${esc(a.title)} · ${f1(a.km,1)} km</option>`).join('')}</select></div>`;
- const ref=refFor(cur),sim=similarOf(cur),wd=WDN[new Date(cur.ms).getUTCDay()],refL=ref?`${wd} anterior`+(cur.ms-ref.ms!==7*DAY?` (${fmtDM(ref.ms)})`:` (${fmtDM(ref.ms)})`):'';
+ const wd=WDN[new Date(cur.ms).getUTCDay()],cands=ACTS.filter(a=>a!==cur&&a.ms<=cur.ms&&akey(a)!==akey(cur)).slice(0,40),man=S.lref?cands.find(a=>akey(a)===S.lref):null,ref=man||refFor(cur),sim=similarOf(cur),dm=ref?fmtDM(ref.ms):'',
+  rw=man?`treino de ${dm}`:`${wd} anterior`,rA=man?`o treino de ${dm}`:`a ${wd} anterior`,rN=man?`no treino de ${dm}`:`na ${wd} anterior`,rD=man?`de ${dm}`:`da ${wd} anterior`,refL=ref?(man?`treino de ${dm}`:`${wd} anterior (${dm})`):'';
+ const sel2=`<div class="ctl" style="margin:-4px 0 14px"><span>Comparar com:</span><select data-sx="lref" style="max-width:100%"><option value="">${wd[0].toUpperCase()+wd.slice(1)} da semana anterior (automático)</option>${cands.map(a=>`<option value="${esc(akey(a))}"${man&&a===man?' selected':''}>${fmtD(a.ms)} ${a.t} · ${esc(a.title)} · ${f1(a.km,1)} km</option>`).join('')}</select></div>`;
  const xc=execStats(cur),xrf=ref?execStats(ref):null,ec=cur.hr>0?EF(cur):null,er=ref&&ref.hr>0?EF(ref):null,tc=trimp(cur),tr=ref?trimp(ref):null,zc=zp(cur),zr=ref?zp(ref):null;
  const sc=splitOf(cur),sr=ref?splitOf(ref):null,cx=cur.x||{},rx=ref&&ref.x?ref.x:{};
  /* cabeçalho */
- const pr=ref?`<span class="chip">vs <b>${refL}</b>: ${esc(ref.title)} · ${f1(ref.km,1)} km</span>`:`<span class="chip">Sem treino na mesma ${wd} nas últimas 4 semanas</span>`;
+ const pr=ref?`<span class="chip">vs <b>${refL}</b>: ${esc(ref.title)} · ${f1(ref.km,1)} km</span>`:`<span class="chip">Sem treino na mesma ${wd} nas últimas 4 semanas (escolha um acima)</span>`;
  const hero=`<div class="card pano"><div><h3>${esc(cur.title)}</h3><p>${wd[0].toUpperCase()+wd.slice(1)}, ${fmtD(cur.ms)} às ${cur.t} · ${pill(cur.cat)}</p></div><div class="chips">${pr}</div></div>`;
  /* KPIs */
  const k=(l,v,sub,d)=>kpiCard(l,v,sub,d||'');
@@ -1096,13 +1098,13 @@ function pgLast(){
  /* gráficos km a km */
  let paceC='',hrC='';
  if(xc){const n=Math.max(xc.p.length,xrf?xrf.p.length:0),xs=Array.from({length:n},(_,i)=>i+1),vc=xs.map((_,i)=>xc.p[i]!=null?-xc.p[i]:null),vr=xrf?xs.map((_,i)=>xrf.p[i]!=null?-xrf.p[i]:null):null,
-  hc=xs.map((_,i)=>xc.h[i]!=null?xc.h[i]:null),hr_=xrf?xs.map((_,i)=>xrf.h[i]!=null?xrf.h[i]:null):null,tipP=i=>`<b>Km ${i+1}</b><br>Este treino: ${xc.p[i]!=null?fmtP(xc.p[i])+'/km':'—'}${xrf?`<br>${wd} anterior: ${xrf.p[i]!=null?fmtP(xrf.p[i])+'/km':'—'}`:''}`,tipH=i=>`<b>Km ${i+1}</b><br>Este treino: ${xc.h[i]??'—'} bpm${xrf?`<br>${wd} anterior: ${xrf.h[i]??'—'} bpm`:''}`;
+  hc=xs.map((_,i)=>xc.h[i]!=null?xc.h[i]:null),hr_=xrf?xs.map((_,i)=>xrf.h[i]!=null?xrf.h[i]:null):null,tipP=i=>`<b>Km ${i+1}</b><br>Este treino: ${xc.p[i]!=null?fmtP(xc.p[i])+'/km':'—'}${xrf?`<br>${rw}: ${xrf.p[i]!=null?fmtP(xrf.p[i])+'/km':'—'}`:''}`,tipH=i=>`<b>Km ${i+1}</b><br>Este treino: ${xc.h[i]??'—'} bpm${xrf?`<br>${rw}: ${xrf.h[i]??'—'} bpm`:''}`;
   const sp=[{n:'Este treino',c:C[0],vals:vc,area:true,sw:2.8}];if(vr)sp.push({n:'Anterior',c:NEU,vals:vr,dash:true,sw:2});
   paceC=lineChart({xs,series:sp,w:CWH(),yfmt:v=>fmtP(-v),xfmt:v=>'km '+Math.round(v),xk:Math.min(n-1,9),tip:tipP,h:240,refs:[{v:-xc.avg,t:'média',c:C[0]}]});
   const sh=[{n:'Este treino',c:C[1],vals:hc,sw:2.8}];if(hr_)sh.push({n:'Anterior',c:NEU,vals:hr_,dash:true,sw:2});
   hrC=lineChart({xs,series:sh,w:CWH(),yfmt:v=>f1(v,0),xfmt:v=>'km '+Math.round(v),xk:Math.min(n-1,9),tip:tipH,h:240})}
  const lg=legend([['Este treino',C[0]]].concat(xrf?[['Anterior',NEU]]:[]));
- const sec1=sech('Ritmo e frequência cardíaca km a km')+`<div class="grid g2">${card('Ritmo por km','Mais alto = mais rápido. Tracejado = '+(ref?refL:'sem referência'),paceC||noData,lg)}${card('FC por km','Batimentos médios de cada parcial',hrC||noData,lg)}</div>`;
+ const sec1=sech('Ritmo e frequência cardíaca km a km')+`<div class="grid g2">${card('Ritmo por km','Mais alto = mais rápido. Tracejado = '+(ref?rw:'sem referência'),paceC||noData,lg)}${card('FC por km','Batimentos médios de cada parcial',hrC||noData,lg)}</div>`;
  /* tabela comparativa */
  const rows=[];const R=(l,c,r,fm,o={})=>{if(c==null)return;rows.push(`<tr><td class="l">${l}</td><td>${fm(c)}</td><td>${r!=null?fm(r):'—'}</td><td>${ref&&r!=null?delta(c,r,o):'—'}</td></tr>`)};
  R('Distância',cur.km,ref?ref.km:null,v=>f1(v,2)+' km',{mode:'abs',dec:2,unit:' km',tol:.05});
@@ -1128,13 +1130,13 @@ function pgLast(){
  const wk=wcur?card('Semana do treino','Até este dia, contra o mesmo ponto da semana anterior.',`<div class="grid kpis" style="grid-template-columns:1fr 1fr">${kpiCard('Km na semana',f1(sum(win(wcur.w,cur.ms).map(a=>a.km)),1),'semana anterior até o mesmo dia: '+f1(pk,1),delta(sum(win(wcur.w,cur.ms).map(a=>a.km)),pk,{dir:0,tol:3}))}${kpiCard('Carga na semana',f1(sum(win(wcur.w,cur.ms).map(trimp)),0),'semana anterior: '+f1(pl,0),delta(sum(win(wcur.w,cur.ms).map(trimp)),pl,{dir:0,tol:3}))}${kpiCard('Equilíbrio antes (TSB)',tsbB!=null?(tsbB>=0?'+':'')+f1(tsbB,0):'—',tsbB==null?'':tsbB>5?'chegou descansado':tsbB<-20?'chegou com fadiga alta':'chegou neutro')}${kpiCard('Forma (CTL) depois',ctlA!=null?f1(ctlA,0):'—','base de 42 dias')}</div>`):'';
  /* insights */
  const ev=[],add=(sev,tag,title,text)=>ev.push({sev,tag,title,text}),ic={ok:'✓',warn:'▲',bad:'✕',info:'●'};
- if(ref&&(ref.cat!==cur.cat||Math.abs(ref.km-cur.km)/cur.km>.35))add('warn','comparação limitada','Treinos de natureza diferente',`O treino da ${wd} anterior foi ${ref.cat.toLowerCase()} de ${f1(ref.km,1)} km; este foi ${cur.cat.toLowerCase()} de ${f1(cur.km,1)} km. Ritmo, FC e zonas não são diretamente comparáveis. Para uma leitura justa, veja a seção 'Contra treinos parecidos'.`);
+ if(ref&&(ref.cat!==cur.cat||Math.abs(ref.km-cur.km)/cur.km>.35))add('warn','comparação limitada','Treinos de natureza diferente',`O treino ${rD} foi ${ref.cat.toLowerCase()} de ${f1(ref.km,1)} km; este foi ${cur.cat.toLowerCase()} de ${f1(cur.km,1)} km. Ritmo, FC e zonas não são diretamente comparáveis. Para uma leitura justa, veja a seção 'Contra treinos parecidos'.`);
  if(ref){const dp=cur.pace-ref.pace,dh=cur.hr-ref.hr,de=ec&&er?(ec/er-1)*100:null;
   const t=Math.abs(dp)<1.5?'Ritmo praticamente igual':dp<0?`${Math.round(-dp)} s/km mais rápido`:`${Math.round(dp)} s/km mais lento`;
   const hrT=Math.abs(dh)<1.5?'com a mesma FC':dh<0?`com FC ${Math.round(-dh)} bpm menor`:`com FC ${Math.round(dh)} bpm maior`;
-  let sev='info',txt=`${t} que na ${wd} anterior, ${hrT}.`;
+  let sev='info',txt=`${t} que ${rN}, ${hrT}.`;
   if(de!=null){if(de>=2){sev='ok';txt+=` A eficiência subiu ${f1(de)}%: você fez mais por batida.`}else if(de<=-2){sev='warn';txt+=` A eficiência caiu ${f1(-de)}%: o mesmo esforço rendeu menos. Calor, sono ou fadiga acumulada costumam ser os suspeitos.`}else txt+=' Eficiência estável.'}
-  add(sev,de!=null?(de>=0?'+':'')+f1(de)+'% EF':'',`Contra a ${wd} anterior`,txt)}
+  add(sev,de!=null?(de>=0?'+':'')+f1(de)+'% EF':'',`Contra ${rA}`,txt)}
  if(sc&&cur.km>=5){add(sc.fade<=2?'ok':sc.fade<=5?'warn':'bad',(sc.fade>=0?'+':'')+f1(sc.fade)+'%','Execução',`${sc.fade<=-1?'Segunda metade mais rápida (negative split): execução ideal.':sc.fade<=2?'Ritmo bem distribuído do começo ao fim.':sc.fade<=5?'Você desacelerou na segunda metade. Comece 3 a 5 s/km mais conservador.':'Desaceleração forte: largou rápido demais ou faltou resistência para essa distância.'}${xc?` O pior km foi o ${xc.wi}º, a ${fmtP(xc.worst)}.`:''}`)}
  if(xc&&xrf&&cur.km>=5)add(xc.cv<xrf.cv-.3?'ok':xc.cv>xrf.cv+.5?'warn':'info',f1(xc.cv)+'%','Regularidade',`Variação entre km de ${f1(xc.cv)}% contra ${f1(xrf.cv)}% no treino anterior. ${xc.cv<xrf.cv-.3?'Ritmo mais uniforme.':xc.cv>xrf.cv+.5?'Ritmo mais irregular; em treino fácil isso costuma ser terreno ou paradas.':'Parecido.'}`);
  if(zc){const hi=zc[2]+zc[3]+zc[4],easyCat=['Rodagem','Leve','Longo'].includes(cur.cat),hardCat=['Intervalado','Limiar/Ritmo','Prova'].includes(cur.cat);
@@ -1154,7 +1156,7 @@ function pgLast(){
  const evh=`<div class="ev">${ev.map(e=>`<div class="card ${e.sev}"><h4><span>${ic[e.sev]}</span>${e.title}<span class="badge">${e.tag}</span></h4><p>${e.text}</p></div>`).join('')}</div>`;
  /* gráfico de parecidos no tempo */
  let simC='';if(sim.length>=3){const arr=[cur,...sim].sort((a,b)=>a.ms-b.ms);simC=card('Ritmo nos treinos parecidos','Mais alto = mais rápido. O último ponto é o treino analisado.',lineChart({xs:arr.map(a=>a.ms),series:[{c:C[0],vals:arr.map(a=>-a.pace),sw:2.4}],yfmt:v=>fmtP(-v),xfmt:fmtDM,xk:Math.min(5,arr.length-1),w:CWH(),h:230,tip:i=>`<b>${fmtD(arr[i].ms)}</b><br>${f1(arr[i].km,1)} km · ${fmtP(arr[i].pace)}/km<br>FC ${f1(arr[i].hr,0)}`}))}
- return sel+hero+kp+sech('Insights')+evh+sec1+sech('Comparação detalhada')+`<div class="grid g2">${tbl}<div style="display:grid;gap:14px;align-content:start">${zcard}${wk}</div></div>`+(simT?sech('Contra treinos parecidos')+`<div class="grid g2">${simT.html}${simC}</div>`:'')}
+ return sel+sel2+hero+kp+sech('Insights')+evh+sec1+sech('Comparação detalhada')+`<div class="grid g2">${tbl}<div style="display:grid;gap:14px;align-content:start">${zcard}${wk}</div></div>`+(simT?sech('Contra treinos parecidos')+`<div class="grid g2">${simT.html}${simC}</div>`:'')}
 
 /* ============ navegação e render ============ */
 const PAGES=[
