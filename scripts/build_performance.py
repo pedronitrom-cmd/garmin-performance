@@ -267,7 +267,13 @@ if wp.exists():
         "passos": latest(stp)[1], "spo2": latest(sp)[1], "resp": latest(rs)[1], "data": ds_ or max(days, default=None),
     }
 
-raw = {"a": rows, "m": sleep_m, "r": rec_rows, "k": k, "x": extras, "we": wellness_extra,
+cfg_path = Path("config.json")
+try:
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
+except Exception as exc:  # configuração inválida não deve derrubar o build
+    print(f"config.json ignorado: {exc}")
+    cfg = {}
+raw = {"cfg": cfg, "a": rows, "m": sleep_m, "r": rec_rows, "k": k, "x": extras, "we": wellness_extra,
        "src": f"Garmin Connect, sync de {datetime.now().strftime('%d/%m/%Y')}"}
 html = template.read_text(encoding="utf-8").replace("/*DATA*/", json.dumps(raw, ensure_ascii=False, separators=(",", ":")))
 (root / "performance.html").write_text(html, encoding="utf-8")

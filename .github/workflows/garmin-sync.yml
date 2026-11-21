@@ -5,7 +5,8 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
-    - cron: "0 8 * * *"
+    - cron: "0 8 * * *"    # 05:00 BRT: atualiza o painel
+    - cron: "20 10 * * *"  # 07:20 BRT: atualiza e envia o resumo do dia no Telegram
 
 permissions:
   contents: read
@@ -30,6 +31,20 @@ jobs:
         run: python scripts/build_dashboard.py
       - name: Build Performance Center page
         run: python scripts/build_performance.py
+      - name: Send Telegram daily summary
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '20 10 * * *'
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SITE_URL: https://garmin-performance.vercel.app/performance.html
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram ainda não configurado: adicione os segredos TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID."
+            exit 0
+          fi
+          npm install --no-save --no-audit --no-fund playwright-core@1.49.1
+          node scripts/telegram_daily.mjs
       - name: Save complete Garmin export
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
