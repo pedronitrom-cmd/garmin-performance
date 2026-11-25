@@ -5,7 +5,8 @@ Saída: output/performance.html — HTML único, sem CDN, sem chamadas de rede.
 Não acessa a API da Garmin.
 """
 from __future__ import annotations
-import json, math
+import json
+import re, math
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -168,6 +169,50 @@ for a in activities:
         round(a.get("averageHR") or 0) or None, round(a.get("maxHR") or 0) or None,
         flat,
     ])
+# ---------- outras atividades: futebol, musculação e demais ----------
+FOOT_KEYS = {"soccer", "football", "soccer_football", "futsal", "indoor_soccer", "team_sports"}
+GYM_KEYS = {"strength_training", "indoor_strength", "weight_training", "hiit", "functional_training", "crossfit"}
+FOOT_RX = re.compile(r"fut|soccer|society|pelada|futsal|bola|fut7|fut 7|partida|racha", re.I)
+GYM_RX = re.compile(r"muscula|academia|for[cç]a|strength|gym|treino de|pernas|superiores|inferiores|peito|costas|bra[cç]o|ombro|hipertrofia|funcional|crossfit", re.I)
+others, type_census = [], defaultdict(int)
+for a in activities:
+    kind = (a.get("activityType") or {}).get("typeKey", "") or "desconhecido"
+    if kind in ("running", "treadmill_running"):
+        continue
+    name = (a.get("activityName") or "").strip()
+    type_census[kind] += 1
+    if kind in FOOT_KEYS or FOOT_RX.search(name):
+        k_ = "F"
+    elif kind in GYM_KEYS or GYM_RX.search(name):
+        k_ = "M"
+    else:
+        k_ = "O"
+    start = (a.get("startTimeLocal") or a.get("startTimeGMT") or "")[:19].replace("Z", "")
+    try:
+        dt = datetime.fromisoformat(start)
+    except ValueError:
+        continue
+    dur = first(a, "duration", "elapsedDuration", "movingDuration")
+    if not dur or dur < 300:
+        continue
+    zones = [first(a, f"hrTimeInZone_{i}") for i in range(1, 6)]
+    zones = [round(z) if z is not None else 0 for z in zones] if any(z is not None for z in zones) else None
+    ex = []
+    for it in a.get("summarizedExerciseSets") or []:
+        if isinstance(it, dict) and it.get("category"):
+            ex.append([str(it.get("category")), it.get("sets") or 0, it.get("reps") or 0])
+    vmax = first(a, "maxSpeed")
+    dist = first(a, "distance")
+    others.append([
+        dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M"), k_, name or kind, round(dur),
+        round(first(a, "averageHR") or 0) or None, round(first(a, "maxHR") or 0) or None,
+        round(first(a, "calories") or 0) or None, round(first(a, "activityTrainingLoad") or 0) or None,
+        round(first(a, "aerobicTrainingEffect") or 0, 1) or None, round(first(a, "anaerobicTrainingEffect") or 0, 1) or None,
+        round(dist / 1000, 2) if dist else None, round(vmax * 3.6, 1) if vmax else None,
+        first(a, "totalSets", "activeSets"), first(a, "totalReps"), kind, zones, ex[:12],
+    ])
+others.sort(key=lambda r: (r[0], r[1]), reverse=True)
+
 # sem FC não dá para calcular carga/eficiência: usa 0 -> o painel ignora via isEasy; mantém o treino na lista
 rows = [r[:6] + [r[6] or 0, r[7] or 0, r[8]] for r in rows]
 rows.sort(key=lambda r: (r[0], r[1]), reverse=True)
@@ -273,7 +318,7 @@ try:
 except Exception as exc:  # configuração inválida não deve derrubar o build
     print(f"config.json ignorado: {exc}")
     cfg = {}
-raw = {"cfg": cfg, "a": rows, "m": sleep_m, "r": rec_rows, "k": k, "x": extras, "we": wellness_extra,
+raw = {"cfg": cfg, "o": others, "a": rows, "m": sleep_m, "r": rec_rows, "k": k, "x": extras, "we": wellness_extra,
        "src": f"Garmin Connect, sync de {datetime.now().strftime('%d/%m/%Y')}"}
 html = template.read_text(encoding="utf-8").replace("/*DATA*/", json.dumps(raw, ensure_ascii=False, separators=(",", ":")))
 (root / "performance.html").write_text(html, encoding="utf-8")
@@ -282,5 +327,7 @@ for ex_ in extras.values():
     for key_ in ex_:
         census[key_] += 1
 print(f"Métricas extras em {len(extras)} de {len(rows)} corridas: " + ", ".join(f"{k_}={v_}" for k_, v_ in sorted(census.items())))
+print("Outras atividades por tipo no Garmin: " + ", ".join(f"{k_}={v_}" for k_, v_ in sorted(type_census.items(), key=lambda x: -x[1])))
+print(f"Classificadas: futebol={sum(1 for o in others if o[2]=='F')}, musculação={sum(1 for o in others if o[2]=='M')}, outras={sum(1 for o in others if o[2]=='O')}")
 print(f"Bem-estar extra: {len(wellness_extra.get('d', []))} dias; peso: {len(wellness_extra.get('w', []))} medições.")
 print(f"Performance Center criado: {len(rows)} corridas, {len(sleep_m)} meses, {len(rec_rows)} dias de recuperação.")
