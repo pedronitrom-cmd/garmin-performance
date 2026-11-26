@@ -291,6 +291,21 @@ body.cardmode #wrap{margin:0}body.cardmode main{padding:0;max-width:none}
 .exl b{text-align:right;font-size:12.5px}
 .wd em.wo{display:flex;gap:2px;font-style:normal}.wd em.wo u{width:15px;height:15px;border-radius:50%;display:grid;place-items:center}
 @media(max-width:720px){.spn b{font-size:21px}.exl div{grid-template-columns:110px 1fr 30px}}
+
+/* ---------- mês a mês ---------- */
+.recs{grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr))}
+.pr.mb b{background:none;-webkit-background-clip:initial;background-clip:initial;color:#fff;font-size:28px}
+.pr.mb:before{background:radial-gradient(circle,color-mix(in srgb,var(--mc) 35%,transparent),transparent 70%)}
+.pr.mb i strong{color:var(--tx);font-weight:650}
+.hmx td,.hmx th{text-align:center}.hmx td.hm{font-weight:650;color:#fff;border-radius:6px;min-width:58px}
+.hmx td.hm0{color:var(--mu)}.hmx td.top{box-shadow:inset 0 0 0 2px #fab219}.hmx tr.tot td{border-top:1px solid var(--bd2)}
+.yrs{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr))}
+.yr{padding:16px 18px;display:grid;gap:12px}.yr.cur{border-color:rgba(76,141,255,.45);background:radial-gradient(300px 140px at 100% 0,rgba(76,141,255,.16),transparent 70%),var(--s1)}
+.yrh{display:flex;justify-content:space-between;align-items:baseline}.yrh b{font-size:26px;letter-spacing:-.02em}.yrh span{font-size:12px;color:var(--mu)}
+.yrn{display:grid;gap:7px}.yrn div{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;font-size:13px}.yrn i{width:10px;height:10px;border-radius:3px}.yrn b{font-size:15px}
+.yrf{display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid var(--bd);padding-top:10px;font-size:12px;color:var(--tx2)}.yrf b{color:#fff;font-size:14px}
+td.gold{color:#fab219;font-weight:700}
+@media(max-width:560px){.recs{grid-template-columns:1fr 1fr;gap:10px}.pr.mb{padding:12px 13px}.pr.mb b{font-size:22px}.pr.mb i{font-size:11px}.medal{font-size:9.5px;padding:2px 7px}}
 @media(prefers-reduced-motion:reduce){.card,.ln,.gp,.rd,.bgrow path,.rb i,.wbar i,.gbar i{animation:none!important}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
@@ -1370,6 +1385,58 @@ function pgOutros(){const N=NOW(),F=OTH.filter(o=>o.k==='F'),M=OTH.filter(o=>o.k
  const hist=`<div class="card mt"><h4>Histórico</h4><p class="sub">${H.length} sessões mais recentes de futebol e musculação.${O.length?` Também há ${O.length} outras atividades (${esc(tk)}) que entram só na carga total.`:''}</p><div class="sc"><table><thead><tr><th class="l">Data</th><th class="l">Tipo</th><th class="l">Atividade</th><th>Duração</th><th>FC</th><th>FC máx</th><th>kcal</th><th>Carga</th><th>TE</th><th>Detalhe</th></tr></thead><tbody>${hr}</tbody></table></div></div>`;
  return ctl+cards+sech('O que isso significa para a sua corrida')+evh+sec1+sF+sM+sec4+hist}
 
+/* ============ Mês a mês e anual ============ */
+const MODS=[['R','Corrida'],['F','Futebol'],['M','Musculação'],['O','Outras']];
+const mLab=k=>MES[+k.slice(5,7)-1]+'/'+k.slice(2,4);
+const MLONG2=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function aggOf(test){const R=ACTS.filter(test),Oa=OTH.filter(test),by=k=>Oa.filter(o=>o.k===k),F=by('F'),M=by('M'),O=by('O'),ez=R.filter(a=>isEasy(a)&&a.hr>0),all=[...R,...Oa];
+ const h=L=>sum(L.map(x=>x.sec))/3600,km=sum(R.map(a=>a.km));
+ return{R:R.length,F:F.length,M:M.length,O:O.length,T:all.length,km,hR:h(R),hF:h(F),hM:h(M),hO:h(O),h:h(all),days:new Set(all.map(x=>x.d)).size,pace:km?sum(R.map(a=>a.sec))/km:null,ef:ez.length>=3?median(ez.map(EF)):null,lg:R.length?Math.max(...R.map(a=>a.km)):0,load:sum(R.map(trimp))+sum(Oa.map(o=>o.tr))}}
+function monthKeys(){const N=NOW(),all=[...ACTS,...OTH];if(!all.length)return[];const f=new Date(Math.min(...all.map(x=>x.ms))),t=new Date(N),ks=[];let y=f.getUTCFullYear(),m=f.getUTCMonth();
+ while(y<t.getUTCFullYear()||(y===t.getUTCFullYear()&&m<=t.getUTCMonth())){ks.push(`${y}-${String(m+1).padStart(2,'0')}`);m++;if(m>11){m=0;y++}}return ks}
+function pgMensal(){const N=NOW(),ks=monthKeys();if(!ks.length)return noData;const A=new Map(ks.map(k=>[k,aggOf(x=>x.d.startsWith(k))])),cur=ks[ks.length-1],years=[...new Set(ks.map(k=>k.slice(0,4)))];
+ if(!S.myr||(S.myr!=='ult'&&!years.includes(S.myr)))S.myr='ult';const met=S.mmet==='h'?'h':'n',mod=['T','R','F','M'].includes(S.mmod)?S.mmod:'T';
+ const sel=(id,opts,v)=>`<select data-sx="${id}">${opts.map(([k,t])=>`<option value="${k}"${v===k?' selected':''}>${t}</option>`).join('')}</select>`;
+ const ctl=`<div class="ctl" style="margin-bottom:14px"><span>Período:</span>${sel('myr',[['ult','Últimos 24 meses'],...years.slice().reverse().map(y=>[y,y])],S.myr)}<span>Medir por:</span>${sel('mmet',[['n','Quantidade de treinos'],['h','Horas de treino']],met)}</div>`;
+ /* recordes de mês */
+ const best=(f,fm,lab,c,md)=>{let bk=null,bv=-Infinity;ks.forEach(k=>{const v=f(A.get(k));if(v!=null&&v>bv){bv=v;bk=k}});if(bk==null||bv<=0)return'';const isCur=bk===cur;
+  return`<div class="card pr mb" style="--mc:${c}"><span class="medal" style="color:${c};border-color:color-mix(in srgb,${c} 45%,transparent);background:color-mix(in srgb,${c} 13%,transparent)">${md}</span><b>${fm(bv)}</b><i>${lab}<br><strong>${MLONG2[+bk.slice(5)-1]} de ${bk.slice(0,4)}</strong>${isCur?' · mês atual':''}</i></div>`};
+ const rec=[best(a=>a.T,v=>v,'treinos no mês','#fab219','MAIS TREINOS'),best(a=>a.days,v=>v+' dias','com pelo menos 1 treino','#fab219','MAIS DIAS ATIVOS'),best(a=>a.h,v=>f1(v,1)+' h','de treino somando tudo','#fab219','MAIS HORAS'),best(a=>a.R,v=>v,'corridas no mês',OK.R[1],'CORRIDA'),best(a=>a.km,v=>f1(v,0)+' km','de corrida no mês',OK.R[1],'KM'),best(a=>a.ef,v=>f1(v,3),'eficiência (EF) nos treinos fáceis',OK.R[1],'RENDIMENTO'),best(a=>a.F,v=>v,'jogos de futebol',OK.F[1],'FUTEBOL'),best(a=>a.M,v=>v,'sessões de musculação',OK.M[1],'MUSCULAÇÃO')].join('');
+ /* mês atual × média */
+ const prev12=ks.slice(-13,-1).map(k=>A.get(k)),ca=A.get(cur),dm=new Date(N).getUTCDate(),dim=new Date(Date.UTC(+cur.slice(0,4),+cur.slice(5),0)).getUTCDate(),proj=v=>v*dim/dm;
+ const avg=f=>prev12.length?mean(prev12.map(f)):0;
+ const kc=MODS.slice(0,3).map(([k,n])=>kpiCard(n+' no mês',`<span class="cu" data-v="${ca[k]}">${ca[k]}</span>`,`média de 12 meses: ${f1(avg(a=>a[k]),1)} · ritmo do mês: ~${f1(proj(ca[k]),0)}`,delta(proj(ca[k]),avg(a=>a[k]),{dir:1,tol:5}))).join('')+kpiCard('Total no mês',`<span class="cu" data-v="${ca.T}">${ca.T}</span>`,`${ca.days} dias ativos · ${f1(ca.h,1)} h`,delta(proj(ca.T),avg(a=>a.T),{dir:1,tol:5}));
+ const hd=sech(`${MLONG2[+cur.slice(5)-1]} até agora`)+`<div class="grid kpis">${kc}</div><p class="note">"Ritmo do mês" projeta o mês inteiro mantendo a frequência até hoje (dia ${dm} de ${dim}). A seta compara essa projeção com a média dos 12 meses anteriores.</p>`;
+ /* gráfico mensal empilhado */
+ const sk=S.myr==='ult'?ks.slice(-24):ks.filter(k=>k.startsWith(S.myr)),val=(a,k)=>met==='h'?a['h'+k]:a[k];
+ const st=sk.map(k=>MODS.map(([m])=>val(A.get(k),m))),cols=MODS.map(([m])=>OK[m][1]);
+ const ch=stackChart({cats:sk,stacks:st,colors:cols,labels:sk.map(mLab),yfmt:v=>met==='h'?f1(v,0)+'h':f1(v,0),tip:i=>{const a=A.get(sk[i]);return`<b>${MLONG2[+sk[i].slice(5)-1]} ${sk[i].slice(0,4)}</b><br>${MODS.map(([m,n])=>`${n}: ${a[m]} (${f1(a['h'+m],1)} h)`).join('<br>')}<br><b>Total: ${a.T} treinos · ${f1(a.h,1)} h · ${a.days} dias</b>`}});
+ const tot=sk.map(k=>A.get(k)[met==='h'?'h':'T']),avgT=mean(tot);
+ const c1=card(met==='h'?'Horas de treino por mês':'Treinos por mês',`Por modalidade${S.myr==='ult'?', últimos 24 meses':', '+S.myr}. Média: ${f1(avgT,met==='h'?1:0)} ${met==='h'?'h':'treinos'} por mês.`,ch,legend(MODS.map(([m,n])=>[n,OK[m][1]])));
+ /* corrida: km e eficiência */
+ const kmC=barChart({cats:sk,vals:sk.map(k=>A.get(k).km),labels:sk.map(mLab),color:OK.R[1],yfmt:v=>f1(v,0),tip:i=>{const a=A.get(sk[i]);return`<b>${MLONG2[+sk[i].slice(5)-1]} ${sk[i].slice(0,4)}</b><br>${f1(a.km,1)} km em ${a.R} corridas<br>Ritmo médio ${a.pace?fmtP(a.pace):'—'}/km<br>Maior corrida ${f1(a.lg,1)} km`},h:210});
+ const efv=sk.map(k=>A.get(k).ef),efC=efv.filter(v=>v!=null).length>=3?lineChart({xs:sk.map(k=>toMs(k+'-15')),series:[{c:'#fab219',vals:efv,area:true,sw:2.4}],yfmt:v=>f1(v,2),xfmt:fmtM,xk:Math.min(6,sk.length-1),h:210,tip:i=>`<b>${MLONG2[+sk[i].slice(5)-1]} ${sk[i].slice(0,4)}</b><br>EF mediana nos treinos fáceis: ${efv[i]!=null?f1(efv[i],3):'—'}`}):noData;
+ const c2=`<div class="grid g2 mt">${card('Corrida: km por mês','Volume mensal de corrida.',kmC)}${card('Corrida: rendimento por mês','Eficiência mediana (velocidade por batimento) nos treinos fáceis. Mais alto = mais condicionado.',efC)}</div>`;
+ /* matriz mês × ano */
+ const mv=(a)=>mod==='T'?(met==='h'?a.h:a.T):(met==='h'?a['h'+mod]:a[mod]),mc=mod==='T'?'#fab219':OK[mod][1];let mx=0;ks.forEach(k=>mx=Math.max(mx,mv(A.get(k))));
+ const mxRows=MLONG2.map((n,i)=>{const mm=String(i+1).padStart(2,'0');return`<tr><td class="l">${n}</td>${years.map(y=>{const k=y+'-'+mm,a=A.get(k);if(!a)return'<td class="hm0">—</td>';const v=mv(a),t=mx?v/mx:0;return`<td class="hm${v===mx&&v>0?' top':''}" style="background:color-mix(in srgb,${mc} ${Math.round(t*78)}%,transparent)"${tipA(`<b>${n} ${y}</b><br>Corrida ${a.R} · Futebol ${a.F} · Musculação ${a.M}${a.O?' · Outras '+a.O:''}<br>${f1(a.h,1)} h · ${a.days} dias ativos${a.km?'<br>'+f1(a.km,0)+' km de corrida':''}`)}>${v?(met==='h'?f1(v,1):v):'·'}</td>`}).join('')}</tr>`}).join('');
+ const ytot=years.map(y=>{const a=aggOf(x=>x.d.startsWith(y));return`<td><b>${met==='h'?f1(mv(a),0)+' h':mv(a)}</b></td>`}).join('');
+ const mxC=card('Mês × ano',`${mod==='T'?'Todas as modalidades':MODS.find(m=>m[0]===mod)[1]} · ${met==='h'?'horas':'treinos'}. Quanto mais forte a cor, maior o mês; a borda dourada marca o recorde.`,`<div class="ctl" style="margin:0 0 10px"><span>Modalidade:</span>${sel('mmod',[['T','Todas'],['R','Corrida'],['F','Futebol'],['M','Musculação']],mod)}</div><div class="sc" style="max-height:none"><table class="hmx"><thead><tr><th class="l">Mês</th>${years.map(y=>`<th>${y}</th>`).join('')}</tr></thead><tbody>${mxRows}<tr class="tot"><td class="l"><b>Ano</b></td>${ytot}</tr></tbody></table></div>`);
+ /* anual */
+ const Y=years.map(y=>({y,a:aggOf(x=>x.d.startsWith(y))})),cy=String(new Date(N).getUTCFullYear()),py=String(+cy-1),doy=isoD(N).slice(5);
+ const ytd=aggOf(x=>x.d.startsWith(cy)),ytp=aggOf(x=>x.d.startsWith(py)&&x.d.slice(5)<=doy);
+ const yc=Y.slice().reverse().map(({y,a})=>`<div class="card yr${y===cy?' cur':''}"><div class="yrh"><b>${y}</b><span>${y===cy?'até '+fmtDM(N):a.days+' dias ativos'}</span></div><div class="yrn">${MODS.filter(([m])=>a[m]||m!=='O').map(([m,n])=>`<div><i style="background:${OK[m][1]}"></i><span>${n}</span><b>${a[m]}</b></div>`).join('')}</div><div class="yrf"><span><b>${a.T}</b> treinos</span><span><b>${f1(a.h,0)}</b> h</span><span><b>${f1(a.km,0)}</b> km</span></div></div>`).join('');
+ const cmp=ytp.T?card(`${cy} × ${py} no mesmo período`,`De 1º de janeiro até ${fmtDM(N)} nos dois anos.`,`<div class="sc" style="max-height:none"><table><thead><tr><th class="l"></th><th>${cy}</th><th>${py}</th><th>Diferença</th></tr></thead><tbody>${[['Corridas','R',0],['Km de corrida','km',0],['Futebol','F',0],['Musculação','M',0],['Total de treinos','T',0],['Dias ativos','days',0],['Horas de treino','h',1]].map(([n,k,d])=>`<tr><td class="l">${n}</td><td>${f1(ytd[k],d)}</td><td>${f1(ytp[k],d)}</td><td>${delta(ytd[k],ytp[k],{dir:1,tol:3})}</td></tr>`).join('')}<tr><td class="l">Ritmo médio de corrida</td><td>${ytd.pace?fmtP(ytd.pace):'—'}</td><td>${ytp.pace?fmtP(ytp.pace):'—'}</td><td>${ytd.pace&&ytp.pace?delta(ytd.pace,ytp.pace,{mode:'pace',dir:-1}):'—'}</td></tr></tbody></table></div>`):'';
+ const ys=stackChart({cats:Y.map(o=>o.y),stacks:Y.map(({a})=>MODS.map(([m])=>met==='h'?a['h'+m]:a[m])),colors:cols,labels:Y.map(o=>o.y),yfmt:v=>f1(v,0),tip:i=>{const a=Y[i].a;return`<b>${Y[i].y}${Y[i].y===cy?' (até '+fmtDM(N)+')':''}</b><br>${MODS.map(([m,n])=>`${n}: ${a[m]} (${f1(a['h'+m],0)} h)`).join('<br>')}<br><b>Total: ${a.T} treinos</b>`},h:230});
+ const an=sech('Ano a ano')+`<div class="grid yrs">${yc}</div><div class="grid g2 mt">${card(met==='h'?'Horas por ano':'Treinos por ano','O ano atual ainda está em andamento.',ys,legend(MODS.map(([m,n])=>[n,OK[m][1]])))}${cmp}</div>`;
+ /* tabela mensal completa */
+ const cols2=[['T','Treinos',0],['R','Corridas',0],['km','Km',0],['pace','Ritmo',-1],['ef','EF fácil',0],['F','Futebol',0],['M','Muscul.',0],['O','Outras',0],['days','Dias ativos',0],['h','Horas',0]];
+ const bestOf={};cols2.forEach(([k,,d])=>{let b=null;ks.forEach(m=>{const v=A.get(m)[k];if(v==null||!v)return;if(b==null||(d<0?v<b:v>b))b=v});bestOf[k]=b});
+ const fmtC=(k,v)=>v==null||(!v&&k!=='O')?'—':k==='km'?f1(v,0):k==='pace'?fmtP(v):k==='ef'?f1(v,3):k==='h'?f1(v,1):v;
+ const tr=ks.slice().reverse().map(m=>{const a=A.get(m);return`<tr${m===cur?' style="background:rgba(76,141,255,.08)"':''}><td class="l">${MLONG2[+m.slice(5)-1].slice(0,3)}/${m.slice(0,4)}</td>${cols2.map(([k])=>`<td${a[k]!=null&&a[k]===bestOf[k]&&a[k]?' class="gold"':''}>${fmtC(k,a[k])}</td>`).join('')}</tr>`}).join('');
+ const tbl=`<div class="card mt"><h4>Todos os meses</h4><p class="sub">Em dourado, o melhor mês de cada coluna. Ritmo: menor é melhor. Mês atual em azul.</p><div class="sc"><table><thead><tr><th class="l">Mês</th>${cols2.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>${tr}</tbody></table></div></div>`;
+ return ctl+sech('Recordes de mês')+`<div class="grid recs">${rec}</div>`+hd+sech('Mês a mês')+`<div class="mt">${c1}</div>`+c2+`<div class="grid g2 mt">${mxC}<div></div></div>`.replace('<div></div></div>','</div>')+an+tbl}
+
 /* ============ Hoje: prontidão, treino do dia, semana, progresso ============ */
 const CFG=()=>(typeof RAW!=='undefined'&&RAW&&RAW.cfg)||{};
 const DAB=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'],DLONG=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
@@ -1504,6 +1571,7 @@ const PAGES=[
  ['hoje','Hoje','Prontidão, treino do dia e progresso',pgHoje,0,'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'],
  ['ultimo','Último treino','Análise e comparação',pgLast,0,'<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/>'],
  ['outros','Futebol e musculação','Frequência, destaques e impacto na corrida',pgOutros,0,'<circle cx="12" cy="12" r="9"/><path d="M12 7.5l4 2.9-1.5 4.6h-5L8 10.4z"/>'],
+ ['mensal','Mês a mês e anual','Treinos por modalidade e melhores meses',pgMensal,0,'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7 14h2M11 14h2M15 14h2M7 17h2M11 17h2"/>'],
  ['pano','Panorama','Visão geral em gráficos',pgPano,0,'<path d="M3 20V8l5 4 4-8 4 6 5-4v14z"/>'],
  ['resumo','Resumo','Como você está hoje',pgResumo,0,'<path d="M4 13a8 8 0 1 1 16 0"/><path d="M12 13l4-5"/><path d="M5 19h14"/>'],
  ['comparativos','Comparativos','Um período contra o outro',pgComparativos,0,'<path d="M7 4v16M7 4L3 8M7 4l4 4"/><path d="M17 20V4m0 16l4-4m-4 4l-4-4"/>'],
@@ -1524,7 +1592,7 @@ const PAGES=[
  ['dados','Qualidade dos dados','O que olhar com cuidado',pgDados,0,'<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>']];
 const SECT=[['hoje','Hoje',['hoje'],'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'],
  ['treinos','Treinos',['ultimo','outros','treinos','intervalados'],'<path d="M13 4a2 2 0 1 0 0 .01M8 21l3-7 3 2v5M10 9l-3 3M11 8l4 1 2 3"/>'],
- ['progresso','Progresso',['pano','resumo','comparativos','volume','carga','intensidade','eficiencia','biomec'],'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'],
+ ['progresso','Progresso',['pano','mensal','resumo','comparativos','volume','carga','intensidade','eficiencia','biomec'],'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'],
  ['provas','Provas',['meta','plano','provas','prerace','exec'],'<path d="M6 21V4"/><path d="M6 4h11l-2 4 2 4H6"/>'],
  ['corpo','Corpo',['recuperacao','corpo','dados'],'<path d="M12 21s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.5-7 10-7 10z"/>']];
 const secOf=p=>SECT.find(s=>s[2].includes(p))||SECT[0];
