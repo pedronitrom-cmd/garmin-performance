@@ -1,0 +1,44 @@
+{
+ "name": "Performance Center",
+ "short_name": "Performance",
+ "description": "Seu painel de corrida: prontidão, treino do dia e evolução.",
+ "lang": "pt-BR",
+ "start_url": "performance.html#hoje",
+ "scope": "./",
+ "display": "standalone",
+ "orientation": "portrait",
+ "background_color": "#0a0f1c",
+ "theme_color": "#0a0f1c",
+ "icons": [
+  {
+   "src": "icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-maskable-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ],
+ "shortcuts": [
+  {
+   "name": "Hoje",
+   "url": "performance.html#hoje"
+  },
+  {
+   "name": "Último treino",
+   "url": "performance.html#ultimo"
+  },
+  {
+   "name": "Plano de treino",
+   "url": "performance.html#plano"
+  }
+ ]
+}
